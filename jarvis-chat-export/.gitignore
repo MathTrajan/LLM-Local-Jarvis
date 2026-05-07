@@ -30,3 +30,6 @@ Thumbs.db
 # Build output
 dist/
 build/
+
+# Scripts de automacao (uso interno, nao publicar)
+scripts/
