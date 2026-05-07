@@ -5,14 +5,14 @@
  * Esta camada é o "cérebro" do Jarvis.
  * Responsabilidades:
  * - Decidir qual provedor usar para cada requisição
- * - Gerenciar fallback automático entre provedores
  * - Manter o system prompt consistente
- * - Registrar logs de uso e erros (Groq & Gemini)
+ * - Registrar logs de uso e erros (Groq)
  * ============================================================
  */
 
-const groqProvider = require("./providers/groq"); // Alterado de openaiProvider
-const geminiProvider = require("./providers/gemini");
+const groqProvider = require("./providers/groq");
+const { getLogContext } = require("./log-context");
+const { getPromptContext: getIngestPromptContext } = require("./log-ingest-store");
 
 // ─────────────────────────────────────────────────────────────
 // CONFIGURAÇÃO DE ROTEAMENTO
@@ -20,53 +20,22 @@ const geminiProvider = require("./providers/gemini");
 
 /**
  * Estratégias de roteamento disponíveis:
- * - "groq"   → Sempre usa Groq; fallback para Gemini se falhar
- * - "gemini" → Sempre usa Gemini; fallback para Groq se falhar
- * - "auto"   → Tenta Groq primeiro; fallback para Gemini
- * - "round-robin" → Alterna entre os dois provedores a cada requisição
+ * - "groq" → Sempre usa o provedor Groq
+ * - "auto" → Usa o provedor Groq
  */
 const STRATEGIES = {
-  GROQ: "groq", // Alterado de OPENAI
-  GEMINI: "gemini",
+  GROQ: "groq",
   AUTO: "auto",
-  ROUND_ROBIN: "round-robin",
 };
-
-// Contador interno para round-robin
-let requestCount = 0;
 
 /**
  * Determina qual provedor deve ser o principal para esta requisição
  */
 function resolveRouting(strategy) {
-  switch (strategy) {
-    case STRATEGIES.GEMINI:
-      return {
-        primary: geminiProvider,
-        primaryName: "gemini",
-        fallback: groqProvider,
-        fallbackName: "groq",
-      };
-
-    case STRATEGIES.ROUND_ROBIN: {
-      requestCount++;
-      const useGroq = requestCount % 2 !== 0;
-      return useGroq
-        ? { primary: groqProvider, primaryName: "groq", fallback: geminiProvider, fallbackName: "gemini" }
-        : { primary: geminiProvider, primaryName: "gemini", fallback: groqProvider, fallbackName: "groq" };
-    }
-
-    // "groq" e "auto" usam Groq como primário
-    case STRATEGIES.GROQ:
-    case STRATEGIES.AUTO:
-    default:
-      return {
-        primary: groqProvider,
-        primaryName: "groq",
-        fallback: geminiProvider,
-        fallbackName: "gemini",
-      };
-  }
+  return {
+    primary: groqProvider,
+    primaryName: "groq",
+  };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -76,7 +45,12 @@ function resolveRouting(strategy) {
 function getJarvisSystemPrompt() {
   return {
     role: "system",
-    content: `Você é Jarvis, um assistente virtual altamente inteligente, sofisticado e eficiente... (seu prompt original)`,
+    content: `Você é Jarvis, um assistente virtual altamente inteligente, sofisticado e eficiente.
+Sempre responda em português brasileiro, de forma objetiva.
+Quando o usuário pedir informações sobre automações, execuções, erros ou status do ambiente:
+- Use os logs injetados no contexto como fonte primária.
+- Cite evidências dos logs (arquivo/evento, horário, erro, runId e errorCode quando existirem).
+- Não invente dados. Se não houver evidência, diga claramente que não encontrou nos logs disponíveis.`,
   };
 }
 
@@ -87,12 +61,33 @@ function getJarvisSystemPrompt() {
 async function processMessage(userMessage, conversationHistory = [], options = {}) {
   const strategy = options.strategy || process.env.AGENT_ROUTING_STRATEGY || STRATEGIES.AUTO;
   const routing = resolveRouting(strategy);
+  let logContext = null;
+  const ingestEnabled = String(process.env.LOG_INGEST_ENABLED || "true").toLowerCase() !== "false";
+
+  if (ingestEnabled) {
+    try {
+      const ingestContext = await getIngestPromptContext(userMessage);
+      if (ingestContext && ingestContext.files > 0) {
+        logContext = ingestContext;
+      }
+    } catch (error) {
+      console.error("[Jarvis] Falha ao montar contexto HTTP ingest:", error.message);
+    }
+  }
+
+  if (!logContext) {
+    logContext = await getLogContext();
+  }
 
   const systemPrompt = getJarvisSystemPrompt();
+  const logsPrompt = {
+    role: "system",
+    content: logContext.context,
+  };
   const newUserMessage = { role: "user", content: userMessage };
 
   const filteredHistory = conversationHistory.filter((m) => m.role !== "system");
-  const messages = [systemPrompt, ...filteredHistory, newUserMessage];
+  const messages = [systemPrompt, logsPrompt, ...filteredHistory, newUserMessage];
 
   const startTime = Date.now();
 
@@ -108,65 +103,36 @@ async function processMessage(userMessage, conversationHistory = [], options = {
     const latency = Date.now() - startTime;
     console.log(`[Jarvis] ✓ Resposta de ${routing.primaryName} em ${latency}ms`);
 
-    return buildResponse(result, routing.primaryName, false, latency);
+    return buildResponse(result, routing.primaryName, false, latency, null, {
+      logSource: logContext.source,
+      logFiles: logContext.files,
+    });
 
   } catch (primaryError) {
     const primaryLatency = Date.now() - startTime;
     console.error(`[Jarvis] ✗ Falha no provedor primário (${routing.primaryName}) após ${primaryLatency}ms:`, primaryError.message);
 
-    // ── Fallback para o provedor SECUNDÁRIO ────────────────────
-    try {
-      console.log(`[Jarvis] ↩ Iniciando fallback para: ${routing.fallbackName}`);
-
-      const fallbackStart = Date.now();
-      const result = await routing.fallback.chat(messages, {
-        maxTokens: options.maxTokens,
-        temperature: options.temperature,
-      });
-
-      const fallbackLatency = Date.now() - fallbackStart;
-      const totalLatency = Date.now() - startTime;
-      console.log(`[Jarvis] ✓ Fallback bem-sucedido com ${routing.fallbackName} em ${fallbackLatency}ms`);
-
-      return buildResponse(result, routing.fallbackName, true, totalLatency, {
+    throw new AgentError(
+      "O provedor Groq está temporariamente indisponível. Tente novamente em alguns instantes.",
+      {
         primaryProvider: routing.primaryName,
         primaryError: primaryError.message,
-      });
-
-    } catch (fallbackError) {
-      const totalLatency = Date.now() - startTime;
-      console.error(`[Jarvis] ✗ Falha também no fallback (${routing.fallbackName}):`, fallbackError.message);
-
-      throw new AgentError(
-        "Todos os provedores de IA estão temporariamente indisponíveis. Tente novamente em alguns instantes.",
-        {
-          primaryProvider: routing.primaryName,
-          primaryError: primaryError.message,
-          fallbackProvider: routing.fallbackName,
-          fallbackError: fallbackError.message,
-          totalLatencyMs: totalLatency,
-        }
-      );
-    }
+        totalLatencyMs: primaryLatency,
+      }
+    );
   }
 }
+
 
 // ─────────────────────────────────────────────────────────────
 // HEALTH CHECK DOS PROVEDORES (Interface de Status)
 // ─────────────────────────────────────────────────────────────
 
 async function checkProvidersHealth() {
-  const [groqOk, geminiOk] = await Promise.allSettled([
-    groqProvider.healthCheck(), // Alterado de openaiProvider
-    geminiProvider.healthCheck(),
-  ]);
-
+  const groq = await groqProvider.healthCheck();
   return {
-    groq: groqOk.status === "fulfilled" && groqOk.value === true, // Agora retorna 'groq'
-    gemini: geminiOk.status === "fulfilled" && geminiOk.value === true,
-    anyAvailable:
-      (groqOk.status === "fulfilled" && groqOk.value) ||
-      (geminiOk.status === "fulfilled" && geminiOk.value),
+    groq: groq === true,
+    anyAvailable: groq === true,
   };
 }
 
@@ -174,13 +140,14 @@ async function checkProvidersHealth() {
 // HELPERS E TIPOS
 // ─────────────────────────────────────────────────────────────
 
-function buildResponse(providerResult, providerName, usedFallback, latencyMs, fallbackInfo = null) {
+function buildResponse(providerResult, providerName, usedFallback, latencyMs, fallbackInfo = null, contextInfo = null) {
   return {
     text: providerResult.text,
     provider: providerName,
     model: providerResult.model,
     usedFallback,
     fallbackInfo,
+    contextInfo,
     latencyMs,
     usage: providerResult.usage || null,
     timestamp: new Date().toISOString(),

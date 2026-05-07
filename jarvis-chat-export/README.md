@@ -1,6 +1,6 @@
-# 🤖 Jarvis Chat — Assistente Virtual com OpenAI + Google Gemini
+# 🤖 Jarvis Chat — Assistente Virtual com Groq
 
-Interface web de chat para o agente virtual **Jarvis**, com integração simultânea às APIs OpenAI e Google Gemini, sistema de fallback automático e design moderno dark-theme.
+Interface web de chat para o agente virtual **Jarvis**, com integração ao provedor **Groq**, sistema de fallback simplificado e design moderno dark-theme.
 
 ---
 
@@ -12,8 +12,7 @@ jarvis-chat/
 │   ├── server.js              ← Servidor Express (entry point)
 │   ├── agent.js               ← Lógica do agente + roteamento
 │   ├── providers/
-│   │   ├── openai.js          ← Integração com OpenAI SDK
-│   │   └── gemini.js          ← Integração com Google Gemini SDK
+│   │   └── groq.js            ← Integração com Groq SDK
 │   ├── .env                   ← Variáveis de ambiente (NÃO commite!)
 │   ├── .env.example           ← Template das variáveis de ambiente
 │   └── package.json
@@ -65,8 +64,7 @@ cp .env.example .env
 Abra o arquivo `.env` com seu editor e preencha as chaves:
 
 ```env
-OPENAI_API_KEY=sua_chave_openai_aqui
-GEMINI_API_KEY=sua_chave_gemini_aqui
+GROQ_API_KEY=SuaChaveGroqAqui
 PORT=3000
 AGENT_ROUTING_STRATEGY=auto
 ```
@@ -95,6 +93,38 @@ npm run dev
 ```
 
 Acesse no navegador: **http://localhost:3000**
+
+---
+
+## 📄 Logs de Automação (Google Drive)
+
+O Jarvis agora pode usar automaticamente arquivos `.txt` de logs como fonte primária para responder sobre:
+- erros
+- execuções
+- status geral do ambiente
+- saúde das automações
+
+### Configuração recomendada (Google Drive API)
+
+No `backend/.env`:
+
+```env
+GOOGLE_DRIVE_FOLDER_ID=1B3Hv1fTVAnU4MV2aYfiMqPT1BFq7pire
+GOOGLE_SERVICE_ACCOUNT_JSON={"type":"service_account", ...}
+```
+
+Notas importantes:
+- compartilhe a pasta do Drive com o e-mail da Service Account (permissão de leitura)
+- os arquivos devem estar em formato `.txt`
+- o Jarvis lê os logs mais recentes e injeta esse contexto automaticamente no chat
+
+### Fallback local (Drive sincronizado no desktop)
+
+Se preferir usar a pasta local sincronizada do Google Drive:
+
+```env
+LOG_LOCAL_DIR=C:\\caminho\\para\\pasta\\de\\logs
+```
 
 ---
 

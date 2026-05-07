@@ -1,15 +1,3 @@
-/**
- * ============================================================
- * JARVIS CHAT — Servidor Express (Entry Point do Backend)
- * ============================================================
- * Responsabilidades:
- * - Inicializar o servidor HTTP
- * - Configurar middlewares de segurança (Helmet, CORS, Rate Limit)
- * - Expor endpoints REST para o frontend (Groq + Gemini)
- * ============================================================
- */
-
-// Carrega variáveis de ambiente do arquivo .env (DEVE ser o primeiro require)
 require("dotenv").config();
 
 const express = require("express");
@@ -17,19 +5,19 @@ const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const path = require("path");
+const fs = require("fs");
 
 const agent = require("./agent");
-
-// ─────────────────────────────────────────────────────────────
-// INICIALIZAÇÃO DO APP
-// ─────────────────────────────────────────────────────────────
+const { hasDriveConfig, getLogContext } = require("./log-context");
+const logIngestStore = require("./log-ingest-store");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const api = express.Router();
 
-// ─────────────────────────────────────────────────────────────
-// MIDDLEWARES DE SEGURANÇA
-// ─────────────────────────────────────────────────────────────
+const publicDir = path.join(__dirname, "public");
+const legacyFrontendDir = path.join(__dirname, "../frontend");
+const frontendDir = fs.existsSync(publicDir) ? publicDir : legacyFrontendDir;
 
 app.use(
   helmet({
@@ -50,7 +38,7 @@ app.use(
   cors({
     origin: process.env.ALLOWED_ORIGIN || "*",
     methods: ["GET", "POST"],
-    allowedHeaders: ["Content-Type"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-jarvis-token"],
   })
 );
 
@@ -60,37 +48,57 @@ const chatRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: {
-    error: "Muitas requisições. Aguarde um momento.",
+    error: "Muitas requisicoes. Aguarde um momento.",
     code: "RATE_LIMIT_EXCEEDED",
   },
 });
 
 app.use(express.json({ limit: "2mb" }));
-app.use(express.static(path.join(__dirname, "../frontend")));
+app.use(express.static(frontendDir));
 
-// ─────────────────────────────────────────────────────────────
-// ENDPOINTS DA API
-// ─────────────────────────────────────────────────────────────
+function getBearerToken(req) {
+  const auth = req.headers.authorization || "";
+  if (auth.toLowerCase().startsWith("bearer ")) {
+    return auth.slice(7).trim();
+  }
+  const headerToken = req.headers["x-jarvis-token"];
+  return typeof headerToken === "string" ? headerToken.trim() : "";
+}
 
-/**
- * POST /api/chat
- * Processa mensagens via Groq ou Gemini
- */
-app.post("/api/chat", chatRateLimiter, async (req, res) => {
+function requireIngestToken(req, res, next) {
+  const expected = process.env.LOG_INGEST_API_TOKEN || "";
+  if (!expected) {
+    return res.status(503).json({
+      error: "LOG_INGEST_API_TOKEN nao configurado.",
+      code: "INGEST_TOKEN_NOT_CONFIGURED",
+    });
+  }
+
+  const provided = getBearerToken(req);
+  if (!provided || provided !== expected) {
+    return res.status(401).json({
+      error: "Token invalido para ingestao de logs.",
+      code: "INVALID_INGEST_TOKEN",
+    });
+  }
+
+  return next();
+}
+
+api.post("/chat", chatRateLimiter, async (req, res) => {
   const { message, history = [], options = {} } = req.body;
 
   if (!message || typeof message !== "string") {
-    return res.status(400).json({ error: "Mensagem inválida.", code: "INVALID_MESSAGE" });
+    return res.status(400).json({ error: "Mensagem invalida.", code: "INVALID_MESSAGE" });
   }
 
   const trimmedMessage = message.trim();
   if (trimmedMessage.length === 0 || trimmedMessage.length > 8000) {
-    return res.status(400).json({ error: "Tamanho de mensagem inválido.", code: "BAD_SIZE" });
+    return res.status(400).json({ error: "Tamanho de mensagem invalido.", code: "BAD_SIZE" });
   }
 
   try {
     const response = await agent.processMessage(trimmedMessage, history, options);
-
     return res.json({
       text: response.text,
       provider: response.provider,
@@ -98,8 +106,8 @@ app.post("/api/chat", chatRateLimiter, async (req, res) => {
       usedFallback: response.usedFallback,
       latencyMs: response.latencyMs,
       timestamp: response.timestamp,
+      contextInfo: response.contextInfo,
     });
-
   } catch (err) {
     console.error("[/api/chat] Erro:", err.message);
     if (err.name === "AgentError") {
@@ -109,57 +117,100 @@ app.post("/api/chat", chatRateLimiter, async (req, res) => {
   }
 });
 
-/**
- * GET /api/health
- * Endpoint que as bolinhas de status do seu Frontend consultam.
- */
-app.get("/api/health", async (req, res) => {
+api.get("/health", async (req, res) => {
   try {
     const status = await agent.checkProvidersHealth();
-
-    // Retornamos exatamente o que o app.js espera: { groq, gemini }
     return res.json({
       status: status.anyAvailable ? "healthy" : "degraded",
-      groq: status.groq, // Isso fará a bolinha da Groq ficar verde
-      gemini: status.gemini,
+      groq: status.groq,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    return res.status(503).json({ status: "error", groq: false, gemini: false });
+    return res.status(503).json({ status: "error", groq: false });
   }
 });
 
-/**
- * GET /api/info
- */
-app.get("/api/info", (req, res) => {
+api.post("/log-ingest", requireIngestToken, async (req, res) => {
+  try {
+    const result = await logIngestStore.appendEvents(req.body);
+    return res.status(202).json({
+      accepted: result.accepted,
+      rejected: result.rejected,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("[/api/log-ingest] Erro:", error.message);
+    return res.status(500).json({ error: "Falha ao ingerir logs.", code: "LOG_INGEST_FAILED" });
+  }
+});
+
+api.get("/logs/query", requireIngestToken, async (req, res) => {
+  try {
+    const events = await logIngestStore.queryEvents({
+      level: req.query.level,
+      automation: req.query.automation,
+      from: req.query.from,
+      to: req.query.to,
+      search: req.query.search,
+      limit: req.query.limit,
+    });
+    return res.json({
+      count: events.length,
+      events,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("[/api/logs/query] Erro:", error.message);
+    return res.status(500).json({ error: "Falha ao consultar logs.", code: "LOG_QUERY_FAILED" });
+  }
+});
+
+api.get("/info", (req, res) => {
+  const ingestEnabled = String(process.env.LOG_INGEST_ENABLED || "true").toLowerCase() !== "false";
   res.json({
     name: "Jarvis Chat API",
-    version: "1.1.0",
+    version: "1.2.0",
     routing: {
       strategy: process.env.AGENT_ROUTING_STRATEGY || "auto",
-      providers: ["groq", "gemini"],
+      providers: ["groq"],
+    },
+    logs: {
+      mode: logIngestStore.getStorageMode(),
+      driveFolderId: process.env.GOOGLE_DRIVE_FOLDER_ID || null,
+      ingestEnabled,
     },
   });
 });
 
+api.get("/logs-debug", async (req, res) => {
+  try {
+    const logs = await getLogContext();
+    const ingestStats = await logIngestStore.getStats();
+    return res.json({
+      source: logs.source,
+      files: logs.files,
+      fileNames: logs.fileNames || [],
+      ingest: ingestStats,
+      note: "Endpoint de diagnostico para confirmar quais logs foram lidos.",
+    });
+  } catch (error) {
+    return res.status(500).json({ source: "error", files: 0, fileNames: [], error: error.message });
+  }
+});
+
+app.use("/api", api);
+app.use("/", api);
+
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "../frontend/index.html"));
+  res.sendFile(path.join(frontendDir, "index.html"));
 });
 
-// ─────────────────────────────────────────────────────────────
-// INICIALIZAÇÃO E LOGS
-// ─────────────────────────────────────────────────────────────
-
-app.listen(PORT, () => {
-  console.log("\n╔══════════════════════════════════════════════╗");
-  console.log("║         🤖  JARVIS CHAT — INICIADO           ║");
-  console.log("╠══════════════════════════════════════════════╣");
-  console.log(`║  Servidor:    http://localhost:${PORT.toString().padEnd(14)}║`);
-  console.log(`║  Estratégia:  ${(process.env.AGENT_ROUTING_STRATEGY || "auto").padEnd(28)}║`);
-  console.log(`║  Groq Key:    ${process.env.GROQ_API_KEY ? "✓ Configurada" : "✗ NÃO ENCONTRADA"}            ║`);
-  console.log(`║  Gemini Key:  ${process.env.GEMINI_API_KEY ? "✓ Configurada" : "✗ NÃO ENCONTRADA"}            ║`);
-  console.log("╚══════════════════════════════════════════════╝\n");
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Jarvis iniciado em http://localhost:${PORT}`);
+    console.log(`Frontend servido de: ${frontendDir}`);
+    console.log(`Storage mode: ${logIngestStore.getStorageMode()}`);
+  });
+}
 
 module.exports = app;
