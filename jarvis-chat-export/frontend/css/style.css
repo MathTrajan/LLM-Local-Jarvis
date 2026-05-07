@@ -35,6 +35,7 @@
   --rsm: 6px;
   --t:   0.2s ease;
   --mob-nav-h: 60px;
+  --mob-nav-offset: calc(var(--mob-nav-h) + env(safe-area-inset-bottom, 0px));
 }
 
 html, body { height: 100%; overflow: hidden; }
@@ -470,7 +471,7 @@ body {
 .mobile-nav {
   display: none; /* hidden on desktop — shown via media query */
   position: fixed; bottom: 0; left: 0; right: 0;
-  height: calc(var(--mob-nav-h) + env(safe-area-inset-bottom, 0px));
+  height: var(--mob-nav-offset);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   background: rgba(5,14,28,0.98);
   border-top: 1px solid var(--border);
@@ -543,20 +544,35 @@ body {
   .hdr-menu { display: flex !important; }
   .hdr-datetime { display: none; }
   .mobile-nav { display: flex; }
-  .app-shell {
-    padding-bottom: calc(var(--mob-nav-h) + env(safe-area-inset-bottom, 0px));
+  .app-shell { padding-bottom: 0; }
+  .chat-main {
+    min-height: 0;
+    padding-bottom: 0;
   }
-  .messages-area { padding: 14px 16px; }
-  .input-area { padding: 8px 12px 7px; }
+  .messages-area {
+    padding: 14px 16px 18px;
+  }
+  .typing-indicator {
+    padding: 4px 16px;
+    margin-bottom: 8px;
+  }
+  .input-area {
+    position: sticky;
+    bottom: 0;
+    z-index: 120;
+    margin-bottom: var(--mob-nav-offset);
+    padding: 8px 12px calc(7px + env(safe-area-inset-bottom, 0px));
+  }
   .quick-cards { grid-template-columns: 1fr 1fr; }
   .sphere-wrap { width: clamp(240px, 70vw, 360px); height: clamp(240px, 70vw, 360px); }
   .welcome-copy p { font-size: 14px; }
   .sl-title { font-size: 20px; letter-spacing: 6px; }
   .sl-sub   { font-size: 8px; letter-spacing: 3px; }
   .automations-panel { padding: 14px 16px 12px; }
+  .automations-panel { padding-bottom: calc(12px + var(--mob-nav-offset)); }
   .ap-grid { grid-template-columns: 1fr; }
   .message-content { max-width: 82%; }
-  .toast-container { bottom: calc(var(--mob-nav-h) + 12px + env(safe-area-inset-bottom, 0px)); }
+  .toast-container { bottom: calc(var(--mob-nav-offset) + 12px); }
 }
 
 /* Small mobile */
@@ -569,6 +585,15 @@ body {
   .sl-title { font-size: 17px; letter-spacing: 4px; }
   .sl-sub { display: none; }
   .input-hint-bar { display: none; }
+  .input-container {
+    align-items: flex-end;
+    border-radius: 22px;
+    padding: 8px;
+  }
+  .message-input {
+    min-height: 40px;
+    padding-top: 8px;
+  }
   .logo-orb { width: 36px; height: 36px; }
 }
 
