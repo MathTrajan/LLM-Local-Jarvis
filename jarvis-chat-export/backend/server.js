@@ -7,12 +7,13 @@ const rateLimit = require("express-rate-limit");
 const path = require("path");
 const fs = require("fs");
 
+const { getEnvString, getEnvBoolean } = require("./config");
 const agent = require("./agent");
 const { hasDriveConfig, getLogContext } = require("./log-context");
 const logIngestStore = require("./log-ingest-store");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(getEnvString("PORT", "3000")) || 3000;
 const api = express.Router();
 
 const publicDir = path.join(__dirname, "public");
@@ -36,7 +37,7 @@ app.use(
 
 app.use(
   cors({
-    origin: process.env.ALLOWED_ORIGIN || "*",
+    origin: getEnvString("ALLOWED_ORIGIN", "*"),
     methods: ["GET", "POST"],
     allowedHeaders: ["Content-Type", "Authorization", "x-jarvis-token"],
   })
@@ -66,7 +67,7 @@ function getBearerToken(req) {
 }
 
 function requireIngestToken(req, res, next) {
-  const expected = process.env.LOG_INGEST_API_TOKEN || "";
+  const expected = getEnvString("LOG_INGEST_API_TOKEN");
   if (!expected) {
     return res.status(503).json({
       error: "LOG_INGEST_API_TOKEN nao configurado.",
@@ -166,17 +167,17 @@ api.get("/logs/query", requireIngestToken, async (req, res) => {
 });
 
 api.get("/info", (req, res) => {
-  const ingestEnabled = String(process.env.LOG_INGEST_ENABLED || "true").toLowerCase() !== "false";
+  const ingestEnabled = getEnvBoolean("LOG_INGEST_ENABLED", true);
   res.json({
     name: "Jarvis Chat API",
     version: "1.2.0",
     routing: {
-      strategy: process.env.AGENT_ROUTING_STRATEGY || "auto",
+      strategy: getEnvString("AGENT_ROUTING_STRATEGY") || "auto",
       providers: ["groq"],
     },
     logs: {
       mode: logIngestStore.getStorageMode(),
-      driveFolderId: process.env.GOOGLE_DRIVE_FOLDER_ID || null,
+      driveFolderId: getEnvString("GOOGLE_DRIVE_FOLDER_ID") || null,
       ingestEnabled,
     },
   });

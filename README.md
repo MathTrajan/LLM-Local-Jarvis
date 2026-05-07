@@ -7,7 +7,7 @@ Confira o agente em execução: [https://jarvis-assistente.onrender.com](https:/
 
 ## ✨ Diferenciais do Projeto
 * **Interface Premium:** Design Dark Mode responsivo com painel de controle lateral.
-* **Roteamento Inteligente:** Integração nativa com **Groq** (para velocidade extrema) e **Google Gemini** (para raciocínio complexo).
+* **Roteamento Inteligente:** Integração nativa com **Groq** (para velocidade extrema).
 * **Monitoramento em Tempo Real:** Status de conexão dos provedores visível na interface.
 * **Configurações Customizáveis:** Controle de criatividade (temperatura) e troca de provedor via UI.
 * **Backend Robusto:** Desenvolvido em Node.js com foco em baixa latência.
@@ -34,7 +34,7 @@ Confira o agente em execução: [https://jarvis-assistente.onrender.com](https:/
 4.  Configure suas chaves no arquivo `.env`:
     ```env
     GROQ_API_KEY=sua_chave_aqui
-    GEMINI_API_KEY=sua_chave_aqui
+    # GEMINI_API_KEY=sua_chave_aqui
     ```
 5.  Inicie o servidor:
     ```bash

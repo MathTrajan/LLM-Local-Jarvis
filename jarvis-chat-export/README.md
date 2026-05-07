@@ -58,18 +58,22 @@ cd jarvis-chat
 cd backend
 
 # Copie o arquivo de exemplo
-cp .env.example .env
+copy .env.example .env
 ```
 
-Abra o arquivo `.env` com seu editor e preencha as chaves:
+Abra o arquivo `.env` com seu editor e preencha as chaves principais:
 
 ```env
-GROQ_API_KEY=SuaChaveGroqAqui
+GROQ_API_KEY_1=SuaChaveGroqAqui
 PORT=3000
 AGENT_ROUTING_STRATEGY=auto
+DATABASE_URL=SuaStringDeConexaoNeonAqui
+LOG_INGEST_API_TOKEN=jarvis_ingest_token_2026_change_me
 ```
 
 > ⚠️ **NUNCA** commite o arquivo `.env` no Git. Ele já está no `.gitignore`.
+
+> 💡 Se estiver usando Vercel em produção, defina `DATABASE_URL` e `LOG_INGEST_API_TOKEN` diretamente no painel de variáveis de ambiente do projeto.
 
 ---
 
@@ -125,6 +129,26 @@ Se preferir usar a pasta local sincronizada do Google Drive:
 ```env
 LOG_LOCAL_DIR=C:\\caminho\\para\\pasta\\de\\logs
 ```
+
+---
+
+## 🚀 Implantação em Vercel + Neon
+
+1. Crie o projeto no Vercel ou use o projeto existente `jarvis-observability`.
+2. Configure as variáveis:
+   - `DATABASE_URL` = string de conexão Neon
+   - `LOG_INGEST_API_TOKEN` = token secreto para `/api/log-ingest`
+   - `GROQ_API_KEY_1` / `GROQ_API_KEY_2`
+   - `AGENT_ROUTING_STRATEGY=auto`
+3. Faça deploy.
+4. Confirme os endpoints:
+   - `/api/info`
+   - `/api/health`
+   - `/api/logs-debug`
+
+> Após a implantação, no servidor Windows, configure também:
+> - `JARVIS_INGEST_URL=https://jarvis-observability.vercel.app/api/log-ingest`
+> - `JARVIS_INGEST_API_TOKEN=<mesmo token em Vercel>`
 
 ---
 

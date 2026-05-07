@@ -1,12 +1,13 @@
 const fs = require("fs");
 const path = require("path");
 const { Pool } = require("pg");
+const { getEnvString, getEnvBoolean, getEnvInt } = require("./config");
 
 const DATA_DIR = path.join(__dirname, "data");
-const DB_FILE = process.env.LOG_DB_FILE || path.join(DATA_DIR, "jarvis-logs.db");
+const DB_FILE = getEnvString("LOG_DB_FILE", path.join(DATA_DIR, "jarvis-logs.db"));
 const MAX_QUERY_LIMIT = 200;
 const DEFAULT_QUERY_LIMIT = 50;
-const POSTGRES_URL = process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
+const POSTGRES_URL = getEnvString("DATABASE_URL") || getEnvString("POSTGRES_URL");
 
 let sqliteDb = null;
 let pgPool = null;
@@ -399,7 +400,7 @@ function buildContextFromEvents(events) {
 }
 
 async function getPromptContext(userMessage) {
-  const maxEvents = Math.max(1, Number(process.env.LOG_INGEST_MAX_CONTEXT_EVENTS || 60));
+  const maxEvents = Math.max(1, getEnvInt("LOG_INGEST_MAX_CONTEXT_EVENTS", 60));
   const search = userMessage && userMessage.length > 4 ? userMessage : null;
 
   const focused = await queryEvents({ search, limit: maxEvents });
@@ -421,7 +422,7 @@ async function getStats() {
     const count = await pool.query("SELECT COUNT(*)::bigint AS total FROM log_events");
 
     return {
-      enabled: String(process.env.LOG_INGEST_ENABLED || "true").toLowerCase() !== "false",
+      enabled: getEnvBoolean("LOG_INGEST_ENABLED", true),
       dataFile: "postgres",
       lastEventAt: recent.rows[0]?.timestamp?.toISOString?.() || recent.rows[0]?.timestamp || null,
       totalEvents: Number(count.rows[0]?.total || 0),
@@ -433,7 +434,7 @@ async function getStats() {
   const countRow = db.prepare("SELECT COUNT(*) as total FROM log_events").get();
 
   return {
-    enabled: String(process.env.LOG_INGEST_ENABLED || "true").toLowerCase() !== "false",
+    enabled: getEnvBoolean("LOG_INGEST_ENABLED", true),
     dataFile: DB_FILE,
     lastEventAt: recentRows[0]?.timestamp || null,
     totalEvents: Number(countRow?.total || 0),

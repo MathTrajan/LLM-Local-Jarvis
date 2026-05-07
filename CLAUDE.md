@@ -23,7 +23,7 @@ Jarvis deve buscar contexto de logs antes de responder.
 
 ## Estado Atual do Projeto
 
-Data de referencia desta atualizacao: **2026-05-07**
+Data de referencia desta atualizacao: **2026-05-07 — Fim do dia**
 
 ### O que ja foi feito
 
@@ -72,6 +72,23 @@ Data de referencia desta atualizacao: **2026-05-07**
    - `JARVIS_INGEST_API_TOKEN`
    como variaveis de ambiente do Windows
 
+13. **[NOVO - 2026-05-07 FINAL]** Centralizado e normalizado TODO acesso a variaveis de ambiente:
+   - Criado `jarvis-chat-export/backend/config.js` com helpers: `getEnvString()`, `getEnvBoolean()`, `getEnvInt()`, `parseJsonEnv()`, `normalizeLocalDirPath()`
+   - Atualizado `server.js`: removidos duplicados de `getEnvString/getEnvBoolean`, agora importa de `config.js`
+   - Atualizado `agent.js`: usa `getEnvString()` para `AGENT_ROUTING_STRATEGY` (evita `auto\r\n`)
+   - Atualizado `providers/groq.js`: normaliza chaves e modelos Groq
+   - Atualizado `log-context.js`: centraliza leitura de todas as vars de Google Drive e local
+   - Atualizado `log-ingest-store.js`: normaliza `DATABASE_URL`, `POSTGRES_URL`, `LOG_INGEST_API_TOKEN`
+   - Atualizados `.env.example` e `README.md` com instrucoes de Neon + ingestao HTTP
+
+14. **[NOVO - 2026-05-07 FINAL]** Projeto ja esta em producao publico:
+   - URL: `https://jarvis-observability.vercel.app`
+   - Projeto Vercel: `jarvis-observability`
+   - Banco: ainda sem Neon configurado (proxima etapa)
+   - Frontend: ja no ar
+   - Backend: ja no ar
+   - Endpoints validados: `/api/health`, `/api/info`, `/api/logs-debug` retornam 200
+
 ---
 
 ## Stack Atual
@@ -94,34 +111,39 @@ Data de referencia desta atualizacao: **2026-05-07**
 ```text
 jarvis-chat-export/
 |-- backend/
-|   |-- server.js
-|   |-- agent.js
-|   |-- log-context.js
-|   |-- log-ingest-store.js
+|   |-- server.js                ← Servidor Express (normalizado)
+|   |-- agent.js                 ← Lógica do agente (normalizado)
+|   |-- config.js                ← [NOVO] Helpers centralizados de env vars
+|   |-- log-context.js           ← Google Drive + fallback local (normalizado)
+|   |-- log-ingest-store.js      ← HTTP ingest + Postgres/SQLite (normalizado)
 |   |-- package.json
-|   |-- .env.example
+|   |-- .env                      ← Local (não commitado)
+|   |-- .env.example              ← Template atualizado com Neon + ingestão
 |   |-- .vercelignore
 |   |-- public/
 |   |   |-- index.html
 |   |   |-- css/style.css
 |   |   `-- js/app.js
-|   `-- providers/
-|       `-- groq.js
+|   |-- providers/
+|   |   `-- groq.js              ← Normalizado
+|   `-- data/
+|       `-- jarvis-logs.db        ← SQLite local (quando nao há Neon)
 |-- frontend/
 |   |-- index.html
 |   |-- css/style.css
 |   `-- js/app.js
-`-- scripts/
-    |-- Atualizacao_Pedidos_em_Carga_Jarvis.ps1
-    `-- Atualizacao_Programacao_de_Pedidos_Jarvis.ps1
+|-- scripts/
+|   |-- Atualizacao_Pedidos_em_Carga_Jarvis.ps1
+|   `-- Atualizacao_Programacao_de_Pedidos_Jarvis.ps1
+`-- .gitignore
 ```
 
-Observacao:
+Observacoes:
 
 - `frontend/` continua como fonte de trabalho visual
 - `backend/public/` e a estrutura usada para deploy no Vercel
-
-Se houver nova mudanca no frontend, manter os arquivos de `backend/public` sincronizados.
+- `backend/config.js` e novo e centraliza TODA leitura de env vars
+- Todos os modulos do backend foram atualizados para usar `config.js`
 
 ---
 
@@ -190,34 +212,52 @@ Por isso o deploy publico deve usar **Neon Postgres**.
 
 ### Backend
 
+Todas as variaveis sao agora lidas via `config.js`:
+- `getEnvString(name, fallback)` — lê e trim automatico
+- `getEnvBoolean(name, fallback)` — parse de true/false
+- `getEnvInt(name, fallback)` — parse de numero
+- `parseJsonEnv(name)` — parse de JSON
+- `normalizeLocalDirPath(path)` — normaliza barras Windows
+
 ```env
+# Servidor
 PORT=3000
 AGENT_ROUTING_STRATEGY=auto
 ALLOWED_ORIGIN=*
 
+# Groq (provedor LLM)
 GROQ_API_KEY_1=
 GROQ_API_KEY_2=
 GROQ_MODEL_1=llama-3.3-70b-versatile
 GROQ_MODEL_2=llama-3.1-8b-instant
 
+# HTTP Ingest (modo principal de logs)
 LOG_INGEST_ENABLED=true
-LOG_INGEST_API_TOKEN=
+LOG_INGEST_API_TOKEN=jarvis_ingest_token_2026_change_me
 LOG_INGEST_MAX_CONTEXT_EVENTS=60
 
-DATABASE_URL=
-# ou POSTGRES_URL=
+# Persistencia em Producao (Vercel + Neon)
+DATABASE_URL=postgresql://user:password@host:5432/db
+# ou POSTGRES_URL=postgresql://...
 
+# Persistencia Local (desenvolvimento)
+# LOG_DB_FILE=C:\\jarvis-data\\jarvis-logs.db
+
+# Google Drive (fallback de logs)
 GOOGLE_DRIVE_FOLDER_ID=
 GOOGLE_DRIVE_LOG_FOLDER_NAME=Log
 GOOGLE_SERVICE_ACCOUNT_JSON=
 
+# Google OAuth (alternativa a Service Account)
 GOOGLE_OAUTH_CLIENT_ID=
 GOOGLE_OAUTH_CLIENT_SECRET=
 GOOGLE_OAUTH_REFRESH_TOKEN=
 GOOGLE_OAUTH_REDIRECT_URI=http://localhost
 
-LOG_LOCAL_DIR=
+# Logs Locais (fallback)
+LOG_LOCAL_DIR=G:\\Meu Drive\\Log
 
+# Tamanho de contexto
 LOG_CONTEXT_MAX_FILES=12
 LOG_CONTEXT_MAX_BYTES_PER_FILE=60000
 LOG_CONTEXT_MAX_CHARS=18000
@@ -226,25 +266,29 @@ LOG_CONTEXT_MAX_CHARS=18000
 ### Scripts PowerShell no servidor Windows
 
 ```powershell
-JARVIS_INGEST_URL
-JARVIS_INGEST_API_TOKEN
-```
-
-Exemplo esperado em producao:
-
-```powershell
+# Configurar variaveis de ambiente da maquina (Machine)
 [Environment]::SetEnvironmentVariable(
   "JARVIS_INGEST_URL",
-  "https://SEU-PROJETO.vercel.app/api/log-ingest",
+  "https://jarvis-observability.vercel.app/api/log-ingest",
   "Machine"
 )
 
 [Environment]::SetEnvironmentVariable(
   "JARVIS_INGEST_API_TOKEN",
-  "SEU_TOKEN_AQUI",
+  "jarvis_ingest_token_2026_change_me",
   "Machine"
 )
+
+# Verificar se foram setadas corretamente
+Get-ChildItem Env:JARVIS*
 ```
+
+### Importante
+
+- Todas as variaveis sao automaticamente trimmed em `config.js`
+- Isso previne erros como `auto\r\n` em `AGENT_ROUTING_STRATEGY`
+- Tokens com espacos extras sao rejeitados corretamente
+- Em producao (Vercel), usar o painel de variaveis de ambiente do projeto
 
 ---
 
@@ -369,57 +413,146 @@ Essa combinacao e a melhor opcao para o desenho atual do projeto:
 
 ## O que falta fazer agora
 
-### Bloco 1 - Publicar a versao atual no GitHub
+### Bloco 1 - Publicar alteracoes no GitHub
 
-- [ ] revisar alteracoes locais
-- [ ] confirmar arquivos que entram no commit
-- [ ] commitar
-- [ ] enviar para `origin`
+- [ ] revisar `git status` (alteracoes criadas na sessao)
+- [ ] revisar `git diff` (comparar mudancas)
+- [ ] adicionar arquivos relevantes:
+  - `jarvis-chat-export/backend/config.js` (novo)
+  - `jarvis-chat-export/backend/server.js` (atualizado)
+  - `jarvis-chat-export/backend/agent.js` (atualizado)
+  - `jarvis-chat-export/backend/providers/groq.js` (atualizado)
+  - `jarvis-chat-export/backend/log-context.js` (atualizado)
+  - `jarvis-chat-export/backend/log-ingest-store.js` (atualizado)
+  - `jarvis-chat-export/backend/.env.example` (atualizado)
+  - `jarvis-chat-export/README.md` (atualizado)
+  - `CLAUDE.md` (documentacao)
+- [ ] fazer commit com mensagem clara:
+  ```
+  feat: normalize environment variables and add centralized config helper
+  
+  - Created config.js for centralized env var reading (trim, parse, normalize)
+  - Updated all backend modules to use config helpers
+  - Prevents \r\n in AGENT_ROUTING_STRATEGY and other env vars
+  - Adds proper parsing for DATABASE_URL/POSTGRES_URL for Neon
+  - Updated .env.example with Neon and ingest configuration
+  - Updated README with Vercel + Neon deployment guide
+  ```
+- [ ] fazer `git push origin main`
 
-### Bloco 2 - Criar deploy publico
+### Bloco 2 - Conectar Neon em Vercel
 
-- [ ] criar ou conectar projeto na Vercel apontando para `jarvis-chat-export/backend`
-- [ ] instalar integracao Neon no projeto da Vercel
-- [ ] configurar `DATABASE_URL` ou `POSTGRES_URL`
-- [ ] configurar `GROQ_API_KEY_1`
-- [ ] configurar `LOG_INGEST_API_TOKEN`
-- [ ] fazer deploy
-- [ ] validar `/api/health`, `/api/info` e `/api/logs-debug`
+- [ ] acessar painel Vercel do projeto `jarvis-observability`
+- [ ] ir em Settings > Environment Variables
+- [ ] adicionar variavel `DATABASE_URL`:
+  - valor: string de conexao Neon (formato: `postgresql://user:password@host/db`)
+- [ ] adicionar variavel `LOG_INGEST_API_TOKEN`:
+  - valor: `jarvis_ingest_token_2026_change_me` (ou um token seguro)
+- [ ] confirmar que as variaveis existentes estao presentes:
+  - `GROQ_API_KEY_1`
+  - `GROQ_API_KEY_2` (opcional, mas recomendado)
+  - `AGENT_ROUTING_STRATEGY`
+- [ ] fazer redeploy do projeto (Vercel faz automaticamente ao reconhecer mudancas no GitHub, ou manualmente)
 
-### Bloco 3 - Preparar servidor Windows
+### Bloco 3 - Validar endpoints em producao
 
-- [ ] configurar `JARVIS_INGEST_URL`
-- [ ] configurar `JARVIS_INGEST_API_TOKEN`
-- [ ] copiar os novos scripts `.ps1`
-- [ ] executar manualmente uma rotina de teste
-- [ ] confirmar que eventos chegam no Jarvis
+Apos o redeploy, testar via browser ou curl:
 
-### Bloco 4 - Validar o ciclo completo
+```bash
+# Verificar se API esta ativa
+curl https://jarvis-observability.vercel.app/api/health
 
-- [ ] rodar automacao real
-- [ ] confirmar ingestao no banco
-- [ ] perguntar no chat sobre a automacao executada
-- [ ] conferir se a resposta cita evidencias corretas
+# Verificar configuracao e modo de persistencia
+curl https://jarvis-observability.vercel.app/api/info
+
+# Verificar diagnostico de logs (deve indicar "postgres" como modo)
+curl https://jarvis-observability.vercel.app/api/logs-debug
+```
+
+Esperado:
+- `/api/info` deve retornar `logs.mode = "postgres"`
+- `/api/health` deve retornar `groq: true`
+- `/api/logs-debug` deve mostrar banco como Postgres
+
+### Bloco 4 - Preparar servidor Windows
+
+- [ ] abrir PowerShell como Administrador
+- [ ] configurar variavel de ambiente:
+  ```powershell
+  [Environment]::SetEnvironmentVariable(
+    "JARVIS_INGEST_URL",
+    "https://jarvis-observability.vercel.app/api/log-ingest",
+    "Machine"
+  )
+  ```
+- [ ] configurar token:
+  ```powershell
+  [Environment]::SetEnvironmentVariable(
+    "JARVIS_INGEST_API_TOKEN",
+    "jarvis_ingest_token_2026_change_me",
+    "Machine"
+  )
+  ```
+- [ ] reiniciar a maquina OU reabrir PowerShell para carregar as variaveis
+- [ ] copiar scripts PowerShell atualizados para a pasta de automacao:
+  - `jarvis-chat-export/scripts/Atualizacao_Pedidos_em_Carga_Jarvis.ps1`
+  - `jarvis-chat-export/scripts/Atualizacao_Programacao_de_Pedidos_Jarvis.ps1`
+- [ ] executar manualmente um dos scripts para teste
+
+### Bloco 5 - Testar ciclo completo de ingestao
+
+1. Executar script no servidor Windows
+2. Monitorar saida do script (deve indicar que enviou eventos para Jarvis)
+3. Acessar `https://jarvis-observability.vercel.app`
+4. No chat, perguntar sobre a automacao que acabou de rodar
+5. Confirmar que:
+   - O Jarvis recuperou os eventos do banco Postgres
+   - A resposta cita evidencias (horario, mensagem, runId, etc.)
+   - O contexto de logs aparece na resposta
+
+### Bloco 6 - Agendamento em Producao (opcional, apos validacao)
+
+Quando tudo estiver validado:
+- [ ] atualizar Agendador de Tarefas Windows para apontar os novos scripts
+- [ ] confirmar que os horarios ja estao configurados corretamente
+- [ ] monitorar a primeira execucao agendada
+- [ ] validar eventos chegando em tempo real no Jarvis
 
 ---
 
 ## Como Continuar a Partir Daqui
 
-### Caminho recomendado
+### Caminho recomendado (prioridade)
 
-1. atualizar o GitHub com o estado atual do projeto
-2. publicar o backend/frontend na Vercel
-3. provisionar o Neon
-4. configurar as env vars da Vercel
-5. obter a URL publica final
-6. apontar os scripts PowerShell para essa URL
-7. iniciar os testes integrados
+1. **Commit + Push no GitHub** (5 min)
+   - fazer git add dos arquivos corretos
+   - fazer commit com mensagem descritiva
+   - fazer git push origin main
+   
+2. **Conectar Neon em Vercel** (10 min)
+   - adicionar `DATABASE_URL` no painel da Vercel
+   - redeploy automatico (Git) ou manual (Deploy button)
+   
+3. **Validar endpoints** (5 min)
+   - testar `/api/info`, `/api/health`, `/api/logs-debug`
+   - confirmar modo postgres
+   
+4. **Preparar servidor Windows** (10 min)
+   - configurar variaveis de ambiente (JARVIS_INGEST_URL, token)
+   - copiar scripts atualizados
+   
+5. **Testar ciclo completo** (15 min)
+   - executar script manualmente
+   - conversar com Jarvis sobre a automacao
+   - validar evidencias nos eventos
 
 ### O que nao fazer
 
-- nao usar SQLite como banco principal na Vercel
-- nao apontar os scripts para uma URL publica antes de definir o token
-- nao confiar apenas nos `.txt` locais como estrategia final de producao
+- nao usar SQLite como banco principal na Vercel (sempre Neon)
+- nao apontar scripts para URL publica sem token definido
+- nao confiar apenas nos `.txt` locais como persistencia de producao
+- nao esquecer de fazer trim em env vars (config.js ja faz)
+- nao deixar `LOG_INGEST_API_TOKEN` vazio em producao
 
 ---
 
@@ -427,12 +560,45 @@ Essa combinacao e a melhor opcao para o desenho atual do projeto:
 
 Se uma nova sessao continuar este projeto, assumir o seguinte:
 
-- o objetivo atual nao e redesign visual, e publicacao operacional
-- o frontend ja esta alinhado com observabilidade
-- o backend ja foi preparado para Postgres
-- o deploy alvo e **Vercel + Neon**
-- o GitHub remoto ja existe
-- os scripts PowerShell do servidor ja possuem versoes adaptadas ao Jarvis
-- o proximo grande marco e:
-  **subir no GitHub, publicar na Vercel, conectar Neon e testar ingestao real**
+### Estado da Arquitetura
+
+- o objetivo atual NAO e redesign visual, e **operacionalizar o ciclo de observabilidade**
+- o frontend ja esta alinhado com observabilidade (mostra fonte de logs, status, eventos)
+- o backend ja foi preparado para Postgres via Neon
+- todas as variaveis de ambiente sao centralizadas em `backend/config.js`
+- o deploy ja esta ativo em `https://jarvis-observability.vercel.app`
+
+### Stack confirmado
+
+- **Backend**: Node.js + Express + Groq
+- **Persistencia local**: SQLite (arquivo `backend/data/jarvis-logs.db`)
+- **Persistencia producao**: Postgres (Neon)
+- **HTTP Ingest**: ativado, pronto para receber logs estruturados
+- **Fallback de logs**: Google Drive ou pasta local (configuravel)
+
+### GitHub
+
+- repositorio remoto: `https://github.com/MathTrajan/Jarvis-Chat-Assistente-Virtual-Inteligente.git`
+- branch: `main`
+- projeto Vercel conectado automaticamente
+
+### Proximo Grande Marco
+
+**Integrar Neon em Vercel e testar ingestao real via servidor Windows**
+
+Checklist:
+- [ ] GitHub atualizado com config.js e normalizacoes
+- [ ] Neon criado e conectado em Vercel via DATABASE_URL
+- [ ] /api/info mostra logs.mode = "postgres"
+- [ ] /api/logs-debug retorna 200 com eventos Postgres
+- [ ] Servidor Windows configurado com JARVIS_INGEST_URL e token
+- [ ] Scripts PowerShell testados manualmente
+- [ ] Primeiro ciclo de ingestao validado
+
+### Consideracoes de Segurança
+
+- LOG_INGEST_API_TOKEN deve ser um valor seguro em producao (nao exemplo padrao)
+- Trocar o token exemplo "jarvis_ingest_token_2026_change_me" antes de usar em ambiente real
+- GROQ_API_KEY_1 e GROQ_API_KEY_2 nunca devem aparecer em logs ou frontend
+- Tokens sao validados em getEnvString() - extras whitespace causa rejeicao
 

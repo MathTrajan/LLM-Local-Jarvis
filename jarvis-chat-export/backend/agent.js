@@ -13,6 +13,7 @@
 const groqProvider = require("./providers/groq");
 const { getLogContext } = require("./log-context");
 const { getPromptContext: getIngestPromptContext } = require("./log-ingest-store");
+const { getEnvString, getEnvBoolean } = require("./config");
 
 // ─────────────────────────────────────────────────────────────
 // CONFIGURAÇÃO DE ROTEAMENTO
@@ -59,10 +60,10 @@ Quando o usuário pedir informações sobre automações, execuções, erros ou 
 // ─────────────────────────────────────────────────────────────
 
 async function processMessage(userMessage, conversationHistory = [], options = {}) {
-  const strategy = options.strategy || process.env.AGENT_ROUTING_STRATEGY || STRATEGIES.AUTO;
+  const strategy = options.strategy || getEnvString("AGENT_ROUTING_STRATEGY", STRATEGIES.AUTO) || STRATEGIES.AUTO;
   const routing = resolveRouting(strategy);
   let logContext = null;
-  const ingestEnabled = String(process.env.LOG_INGEST_ENABLED || "true").toLowerCase() !== "false";
+  const ingestEnabled = getEnvBoolean("LOG_INGEST_ENABLED", true);
 
   if (ingestEnabled) {
     try {

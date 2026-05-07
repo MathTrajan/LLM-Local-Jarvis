@@ -5,12 +5,13 @@
  */
 
 const Groq = require("groq-sdk");
+const { getEnvString } = require("../config");
 
-const KEY_1 = process.env.GROQ_API_KEY_1 || process.env.GROQ_API_KEY || "";
-const MODEL_1 = process.env.GROQ_MODEL_1 || process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+const KEY_1 = getEnvString("GROQ_API_KEY_1") || getEnvString("GROQ_API_KEY") || "";
+const MODEL_1 = getEnvString("GROQ_MODEL_1") || getEnvString("GROQ_MODEL") || "llama-3.3-70b-versatile";
 
-const KEY_2 = process.env.GROQ_API_KEY_2 || "";
-const MODEL_2 = process.env.GROQ_MODEL_2 || "llama-3.1-8b-instant";
+const KEY_2 = getEnvString("GROQ_API_KEY_2") || "";
+const MODEL_2 = getEnvString("GROQ_MODEL_2") || "llama-3.1-8b-instant";
 
 const clients = new Map();
 

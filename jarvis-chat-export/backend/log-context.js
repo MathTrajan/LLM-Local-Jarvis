@@ -1,46 +1,34 @@
 const fs = require("fs/promises");
 const path = require("path");
 const { google } = require("googleapis");
+const { getEnvString, getEnvInt, getEnvBoolean, parseJsonEnv, normalizeLocalDirPath } = require("./config");
 
-const MAX_FILES = Number(process.env.LOG_CONTEXT_MAX_FILES || 12);
-const MAX_BYTES_PER_FILE = Number(process.env.LOG_CONTEXT_MAX_BYTES_PER_FILE || 60000);
-const MAX_CONTEXT_CHARS = Number(process.env.LOG_CONTEXT_MAX_CHARS || 18000);
+const MAX_FILES = getEnvInt("LOG_CONTEXT_MAX_FILES", 12);
+const MAX_BYTES_PER_FILE = getEnvInt("LOG_CONTEXT_MAX_BYTES_PER_FILE", 60000);
+const MAX_CONTEXT_CHARS = getEnvInt("LOG_CONTEXT_MAX_CHARS", 18000);
 
 function normalizeFileName(name) {
   return (name || "").toLowerCase().endsWith(".txt");
 }
 
 function parseServiceAccountFromEnv() {
-  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch (_) {
-    return null;
-  }
+  return parseJsonEnv("GOOGLE_SERVICE_ACCOUNT_JSON");
 }
 
 function hasOAuthUserConfig() {
   return Boolean(
-    process.env.GOOGLE_DRIVE_FOLDER_ID &&
-      process.env.GOOGLE_OAUTH_CLIENT_ID &&
-      process.env.GOOGLE_OAUTH_CLIENT_SECRET &&
-      process.env.GOOGLE_OAUTH_REFRESH_TOKEN
+    getEnvString("GOOGLE_DRIVE_FOLDER_ID") &&
+      getEnvString("GOOGLE_OAUTH_CLIENT_ID") &&
+      getEnvString("GOOGLE_OAUTH_CLIENT_SECRET") &&
+      getEnvString("GOOGLE_OAUTH_REFRESH_TOKEN")
   );
 }
 
 function hasDriveConfig() {
   const hasFolderTarget = Boolean(
-    process.env.GOOGLE_DRIVE_FOLDER_ID || process.env.GOOGLE_DRIVE_LOG_FOLDER_NAME
+    getEnvString("GOOGLE_DRIVE_FOLDER_ID") || getEnvString("GOOGLE_DRIVE_LOG_FOLDER_NAME")
   );
   return Boolean(hasFolderTarget && (parseServiceAccountFromEnv() || hasOAuthUserConfig()));
-}
-
-function normalizeLocalDirPath(localDir) {
-  if (!localDir) return "";
-  const trimmed = String(localDir).trim().replace(/^"(.*)"$/, "$1");
-  // Accept .env values like G:\\Meu Drive\\Log and normalize to G:\Meu Drive\Log
-  return trimmed.replace(/\\\\/g, "\\");
 }
 
 async function listLocalLogFiles(localDir) {
@@ -72,12 +60,12 @@ function buildDriveClient() {
     });
   } else if (hasOAuthUserConfig()) {
     const oauth = new google.auth.OAuth2(
-      process.env.GOOGLE_OAUTH_CLIENT_ID,
-      process.env.GOOGLE_OAUTH_CLIENT_SECRET,
-      process.env.GOOGLE_OAUTH_REDIRECT_URI || "http://localhost"
+      getEnvString("GOOGLE_OAUTH_CLIENT_ID"),
+      getEnvString("GOOGLE_OAUTH_CLIENT_SECRET"),
+      getEnvString("GOOGLE_OAUTH_REDIRECT_URI", "http://localhost")
     );
     oauth.setCredentials({
-      refresh_token: process.env.GOOGLE_OAUTH_REFRESH_TOKEN,
+      refresh_token: getEnvString("GOOGLE_OAUTH_REFRESH_TOKEN"),
     });
     auth = oauth;
   }
@@ -147,7 +135,7 @@ async function listDriveLogFilesRecursive(rootFolderId) {
 async function resolveRootLogFolderId() {
   const drive = buildDriveClient();
   if (!drive) return null;
-  const folderName = process.env.GOOGLE_DRIVE_LOG_FOLDER_NAME || "Log";
+  const folderName = getEnvString("GOOGLE_DRIVE_LOG_FOLDER_NAME", "Log");
   const query = `'root' in parents and trashed=false and mimeType='application/vnd.google-apps.folder' and name='${folderName.replace(/'/g, "\\'")}'`;
   const response = await drive.files.list({
     q: query,
@@ -195,8 +183,8 @@ function buildContext(filesWithContent) {
 }
 
 async function loadLogsFromSource() {
-  let folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
-  const localDir = normalizeLocalDirPath(process.env.LOG_LOCAL_DIR);
+  let folderId = getEnvString("GOOGLE_DRIVE_FOLDER_ID");
+  const localDir = normalizeLocalDirPath(getEnvString("LOG_LOCAL_DIR"));
 
   if (hasDriveConfig()) {
     if (!folderId) {
