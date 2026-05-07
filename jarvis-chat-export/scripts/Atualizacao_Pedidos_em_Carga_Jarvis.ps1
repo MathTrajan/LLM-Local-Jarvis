@@ -10,7 +10,13 @@ $caminhoBase = "G:\Meu Drive\Base_Ecommerce\Pedidos em Carga Base.xlsx"
 $caminhoDownload = "G:\.shortcut-targets-by-id\1wuEF_LwjGeyjoz9qP1OfgRYzaXiWbL3z\E-COMMERCE Probel\17_Relatórios_Automáticos\Pedidos em Carga\Pedidos em Carga Download.xlsx"
 
 # --- 1.1 INTEGRACAO JARVIS (HTTP INGEST) ---
-$jarvisIngestUrl = "http://localhost:3001/api/log-ingest"
+$jarvisIngestUrl = [Environment]::GetEnvironmentVariable("JARVIS_INGEST_URL", "Machine")
+if ([string]::IsNullOrWhiteSpace($jarvisIngestUrl)) {
+    $jarvisIngestUrl = [Environment]::GetEnvironmentVariable("JARVIS_INGEST_URL", "User")
+}
+if ([string]::IsNullOrWhiteSpace($jarvisIngestUrl)) {
+    $jarvisIngestUrl = "http://localhost:3000/api/log-ingest"
+}
 $jarvisToken = [Environment]::GetEnvironmentVariable("JARVIS_INGEST_API_TOKEN", "Machine")
 if ([string]::IsNullOrWhiteSpace($jarvisToken)) {
     $jarvisToken = [Environment]::GetEnvironmentVariable("JARVIS_INGEST_API_TOKEN", "User")
