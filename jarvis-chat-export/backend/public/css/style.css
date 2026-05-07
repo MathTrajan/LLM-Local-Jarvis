@@ -8,6 +8,8 @@
 .monitor-loading { font-size: 10px; color: var(--text2); text-align: center; padding: 8px 0; }
 .monitor-item { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: var(--rsm); background: rgba(0,217,255,0.04); }
 .monitor-item:hover { background: rgba(0,217,255,0.08); }
+.monitor-item-clickable { cursor: pointer; }
+.monitor-item-clickable:hover { background: rgba(0,217,255,0.13); outline: 1px solid var(--border2); }
 .monitor-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .monitor-dot.ok          { background: var(--success); box-shadow: 0 0 5px var(--success); }
 .monitor-dot.overdue     { background: var(--danger);  box-shadow: 0 0 5px var(--danger); animation: pulse-dot 1.2s ease-in-out infinite; }

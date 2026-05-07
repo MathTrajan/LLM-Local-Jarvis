@@ -150,12 +150,27 @@ async function refreshMonitor() {
           : a.status === "pending"
           ? `${a.hoursElapsed}h atrás`
           : "";
-        return `<div class="monitor-item ${a.status}">
+        const clickable = a.connected ? "monitor-item-clickable" : "";
+        const query = a.connected ? `data-query="O que aconteceu com a automação ${a.displayName}? Mostre o status da última execução, erros e runId se houver."` : "";
+        return `<div class="monitor-item ${a.status} ${clickable}" ${query}>
           <span class="monitor-dot ${a.status}"></span>
           <span class="monitor-name" title="${a.displayName}">${a.displayName}</span>
           <span class="monitor-meta">${meta}</span>
         </div>`;
       }).join("");
+
+      list.querySelectorAll(".monitor-item-clickable").forEach((el) => {
+        el.addEventListener("click", () => {
+          const q = el.getAttribute("data-query");
+          if (!q) return;
+          const input = DOM.messageInput();
+          if (input) {
+            input.value = q;
+            input.dispatchEvent(new Event("input"));
+            sendMessage();
+          }
+        });
+      });
     }
 
     const overdueCount = data.overdueCount || 0;
