@@ -137,6 +137,11 @@
       </aside>
 
       <main class="chat-main">
+        <div class="overdue-banner" id="overdue-banner" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span id="overdue-banner-text">1 AUTOMAÇÃO ATRASADA</span>
+        </div>
+
         <section class="messages-area" id="messages-area" role="log" aria-live="polite">
           <div class="welcome-screen" id="welcome-screen">
             <div class="sphere-wrap" aria-hidden="true">
@@ -233,6 +238,17 @@
       </main>
 
       <aside class="right-sidebar" id="right-sidebar">
+
+        <div class="rs-card" id="rs-monitor-card">
+          <div class="rs-card-title">
+            AUTOMAÇÕES
+            <span class="monitor-badge" id="monitor-overdue-badge" hidden>0</span>
+          </div>
+          <div id="monitor-list" class="monitor-list">
+            <div class="monitor-loading">CARREGANDO...</div>
+          </div>
+        </div>
+
         <div class="rs-card">
           <div class="rs-card-title">NUCLEO IA</div>
           <div class="radial-progress">

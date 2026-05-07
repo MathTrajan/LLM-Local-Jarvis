@@ -441,10 +441,31 @@ async function getStats() {
   };
 }
 
+async function getLastEventForAutomation(automationName, afterTimestamp) {
+  const afterIso = afterTimestamp instanceof Date ? afterTimestamp.toISOString() : afterTimestamp;
+
+  if (POSTGRES_URL) {
+    await ensurePostgres();
+    const pool = getPool();
+    const result = await pool.query(
+      `SELECT * FROM log_events WHERE LOWER(automation) = LOWER($1) AND timestamp >= $2::timestamptz ORDER BY timestamp DESC LIMIT 1`,
+      [automationName, afterIso]
+    );
+    return result.rows[0] ? rowToEvent(result.rows[0]) : null;
+  }
+
+  const db = ensureSqlite();
+  const row = db
+    .prepare(`SELECT * FROM log_events WHERE LOWER(automation) = LOWER(?) AND timestamp >= ? ORDER BY timestamp DESC LIMIT 1`)
+    .get(automationName, afterIso);
+  return row ? rowToEvent(row) : null;
+}
+
 module.exports = {
   appendEvents,
   queryEvents,
   getPromptContext,
   getStats,
   getStorageMode,
+  getLastEventForAutomation,
 };

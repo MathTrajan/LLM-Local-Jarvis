@@ -8,6 +8,10 @@ const state       = { history: [], isLoading: false, messageCount: 0 };
 
 const DOM = {
   messagesArea:      () => document.getElementById("messages-area"),
+  overdueBanner:     () => document.getElementById("overdue-banner"),
+  overdueBannerText: () => document.getElementById("overdue-banner-text"),
+  monitorList:       () => document.getElementById("monitor-list"),
+  monitorBadge:      () => document.getElementById("monitor-overdue-badge"),
   welcomeScreen:     () => document.getElementById("welcome-screen"),
   messageInput:      () => document.getElementById("message-input"),
   sendButton:        () => document.getElementById("send-button"),
@@ -114,6 +118,53 @@ async function refreshSystemStatus() {
     dot.style.background = healthy ? "var(--success)" : "var(--danger)";
     dot.style.boxShadow = healthy ? "0 0 8px var(--success)" : "0 0 8px var(--danger)";
   }
+}
+
+/* ─── Monitor ────────────────────────────────── */
+const STATUS_LABEL = { ok: "OK", overdue: "ATRASADA", pending: "AGUARDANDO", not_connected: "S/ CONEXÃO", not_scheduled: "NÃO AGENDADA" };
+
+function formatMonitorTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
+async function refreshMonitor() {
+  try {
+    const res = await fetch(`${API_BASE}/api/monitor`);
+    if (!res.ok) return;
+    const data = await res.json();
+
+    const list = DOM.monitorList();
+    const badge = DOM.monitorBadge();
+    const banner = DOM.overdueBanner();
+    const bannerText = DOM.overdueBannerText();
+
+    if (list) {
+      list.innerHTML = data.automations.map((a) => {
+        const meta = a.status === "ok"
+          ? formatMonitorTime(a.lastEventAt)
+          : a.status === "overdue"
+          ? `${a.hoursElapsed}h atraso`
+          : a.status === "pending"
+          ? `${a.hoursElapsed}h atrás`
+          : "";
+        return `<div class="monitor-item ${a.status}">
+          <span class="monitor-dot ${a.status}"></span>
+          <span class="monitor-name" title="${a.displayName}">${a.displayName}</span>
+          <span class="monitor-meta">${meta}</span>
+        </div>`;
+      }).join("");
+    }
+
+    const overdueCount = data.overdueCount || 0;
+    if (badge) { badge.textContent = overdueCount; badge.hidden = overdueCount === 0; }
+    if (banner && bannerText) {
+      banner.hidden = overdueCount === 0;
+      bannerText.textContent = `${overdueCount} AUTOMAÇÃO${overdueCount > 1 ? "ÕES" : ""} ATRASADA${overdueCount > 1 ? "S" : ""}`;
+    }
+  } catch (_) {}
 }
 
 /* ─── Clock ──────────────────────────────────── */
@@ -376,9 +427,11 @@ function init() {
   refreshSystemStatus().catch(() => {
     showToast("Nao foi possivel carregar o status operacional.", "error");
   });
+  refreshMonitor().catch(() => {});
   setInterval(() => {
     refreshSystemStatus().catch(() => {});
-  }, 30000);
+    refreshMonitor().catch(() => {});
+  }, 60000);
 
   initParticles();
   initSphere();

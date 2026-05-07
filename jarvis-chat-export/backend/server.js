@@ -11,6 +11,7 @@ const { getEnvString, getEnvBoolean } = require("./config");
 const agent = require("./agent");
 const { hasDriveConfig, getLogContext } = require("./log-context");
 const logIngestStore = require("./log-ingest-store");
+const { getMonitorStatus } = require("./monitor");
 
 const app = express();
 const PORT = Number(getEnvString("PORT", "3000")) || 3000;
@@ -181,6 +182,16 @@ api.get("/info", (req, res) => {
       ingestEnabled,
     },
   });
+});
+
+api.get("/monitor", async (req, res) => {
+  try {
+    const status = await getMonitorStatus();
+    return res.json(status);
+  } catch (error) {
+    console.error("[/api/monitor] Erro:", error.message);
+    return res.status(500).json({ error: "Falha ao calcular status do monitor.", code: "MONITOR_FAILED" });
+  }
 });
 
 api.get("/logs-debug", async (req, res) => {
