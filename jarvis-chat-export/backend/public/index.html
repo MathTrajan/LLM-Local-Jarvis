@@ -2,11 +2,16 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>J.A.R.V.I.S - Observability Console</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#020813" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>J.A.R.V.I.S — Observability Console</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="apple-touch-icon" href="favicon.svg" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -17,59 +22,52 @@
 
   <div class="app-shell">
     <header class="top-header">
+
+      <!-- Logo (esquerda) -->
       <div class="hdr-left">
         <div class="logo-orb" aria-hidden="true">
           <div class="orb-ring or-1"></div>
           <div class="orb-ring or-2"></div>
           <div class="orb-core">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+            <svg viewBox="0 0 32 32" fill="none" class="jarvis-icon">
+              <!-- outer helmet frame -->
+              <path d="M16,1 L29,7.5 L29.5,21 L22,30 L10,30 L2.5,21 L3,7.5 Z"
+                    stroke="currentColor" stroke-width="1.15" fill="none" opacity="0.9"/>
+              <!-- inner face plate -->
+              <path d="M16,4.5 L25.5,9.5 L26,20 L20,27 L12,27 L6,20 L6.5,9.5 Z"
+                    stroke="currentColor" stroke-width="0.45" fill="none" opacity="0.28"/>
+              <!-- left eye slit -->
+              <path d="M6.5,16.5 L7,13.5 L14.8,12 L15.2,15 Z" fill="currentColor"/>
+              <!-- right eye slit -->
+              <path d="M16.8,15 L17.2,12 L25,13.5 L25.5,16.5 Z" fill="currentColor"/>
+              <!-- arc reactor -->
+              <path d="M16,23.5 L12.5,19.5 L19.5,19.5 Z"
+                    stroke="currentColor" stroke-width="0.9" fill="none" opacity="0.9"/>
+              <circle cx="16" cy="21.5" r="1.25" fill="currentColor"/>
+              <!-- chin -->
+              <path d="M12,27.5 L16,30 L20,27.5" stroke="currentColor" stroke-width="0.65" opacity="0.5"/>
+            </svg>
           </div>
         </div>
-        <div class="logo-text">
-          <span class="logo-title">J.A.R.V.I.S</span>
-          <span class="logo-sub">AUTOMATION OBSERVABILITY CONSOLE</span>
-        </div>
       </div>
 
-      <div class="hdr-metrics">
-        <div class="metric-item">
-          <span class="metric-label">SISTEMA</span>
-          <span class="metric-value success" id="hdr-system-status">
-            <span class="metric-dot"></span>OPERACIONAL
-          </span>
-        </div>
-        <div class="metric-sep"></div>
-        <div class="metric-item">
-          <span class="metric-label">FONTE ATIVA</span>
-          <span class="metric-value" id="hdr-log-source">INICIANDO</span>
-        </div>
-        <div class="metric-sep"></div>
-        <div class="metric-item">
-          <span class="metric-label">LATENCIA</span>
-          <span class="metric-value" id="hdr-latency">18ms</span>
-        </div>
-        <div class="metric-sep"></div>
-        <div class="metric-item">
-          <span class="metric-label">MODO DE LOG</span>
-          <span class="metric-value" id="hdr-log-mode">INDEFINIDO</span>
-        </div>
-        <div class="metric-sep"></div>
-        <div class="metric-item">
-          <span class="metric-label">EVENTOS</span>
-          <span class="metric-value" id="msg-counter">0</span>
-        </div>
+      <!-- Nome centralizado -->
+      <div class="hdr-center">
+        <span class="hdr-brand">J.A.R.V.I.S</span>
+        <span class="hdr-brand-sub">AUTOMATION OBSERVABILITY CONSOLE</span>
       </div>
 
+      <!-- Direita: relógio + ações -->
       <div class="hdr-right">
         <div class="hdr-datetime">
-          <span class="hdr-date" id="live-date">29 ABR. 2026</span>
-          <span class="hdr-time" id="live-time">12:10:39</span>
+          <span class="hdr-date" id="live-date">07 MAI. 2026</span>
+          <span class="hdr-time" id="live-time">00:00:00</span>
         </div>
         <button class="hdr-icon-btn" title="Notificacoes">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
         </button>
         <button class="hdr-icon-btn" title="Reiniciar conversa" id="btn-clear-chat">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.49"/></svg>
         </button>
         <button class="hdr-icon-btn hdr-menu" id="btn-menu-toggle" title="Menu">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
@@ -78,54 +76,29 @@
     </header>
 
     <div class="app-body">
+
+      <!-- Sidebar esquerda -->
       <aside class="left-sidebar" id="left-sidebar">
         <nav class="nav-menu">
-          <button class="nav-item active" title="Observabilidade">
-            <span class="nav-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>
-            </span>
-            <span class="nav-label">OBSERVABILIDADE</span>
+          <button class="nav-item nav-item--label-only active" id="nav-jarvis" title="Chat Jarvis">
+            <span class="nav-label">JARVIS</span>
           </button>
-          <button class="nav-item" title="Chat Operacional">
-            <span class="nav-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            </span>
-            <span class="nav-label">CHAT OPERACIONAL</span>
-          </button>
-          <button class="nav-item" title="Eventos">
-            <span class="nav-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-            </span>
-            <span class="nav-label">EVENTOS</span>
-          </button>
-          <button class="nav-item" title="Dados">
-            <span class="nav-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
-            </span>
-            <span class="nav-label">DADOS</span>
-          </button>
-          <button class="nav-item" title="Automacoes">
+          <button class="nav-item" id="nav-automacoes" title="Automacoes">
             <span class="nav-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 17.5h7M17.5 14v7"/></svg>
             </span>
-            <span class="nav-label">AUTOMACOES</span>
-          </button>
-          <button class="nav-item" title="Agente">
-            <span class="nav-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><circle cx="12" cy="16" r="1"/></svg>
-            </span>
-            <span class="nav-label">AGENTE IA</span>
-          </button>
-          <button class="nav-item" title="Configuracoes">
-            <span class="nav-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-            </span>
-            <span class="nav-label">CONFIGURACOES</span>
+            <span class="nav-label">AUTOMAÇÕES</span>
           </button>
         </nav>
-
         <div class="nav-footer">
-          <div class="nav-avatar">J</div>
+          <div class="nav-avatar">
+            <svg viewBox="0 0 32 32" fill="none" width="14" height="14">
+              <path d="M16,1 L29,7.5 L29.5,21 L22,30 L10,30 L2.5,21 L3,7.5 Z" stroke="currentColor" stroke-width="1.2" fill="none" opacity="0.9"/>
+              <path d="M6.5,16.5 L7,13.5 L14.8,12 L15.2,15 Z" fill="currentColor"/>
+              <path d="M16.8,15 L17.2,12 L25,13.5 L25.5,16.5 Z" fill="currentColor"/>
+              <circle cx="16" cy="21.5" r="1.5" fill="currentColor"/>
+            </svg>
+          </div>
           <div class="nav-footer-info">
             <span class="nav-footer-title">JARVIS SYSTEM</span>
             <span class="nav-footer-sub">ADMIN ACCESS</span>
@@ -142,14 +115,14 @@
           <span id="overdue-banner-text">1 AUTOMAÇÃO ATRASADA</span>
         </div>
 
+        <!-- ══ Área de chat ══ -->
         <section class="messages-area" id="messages-area" role="log" aria-live="polite">
           <div class="welcome-screen" id="welcome-screen">
+
             <div class="sphere-wrap" aria-hidden="true">
-              <div class="orbit-ring orb-a"></div>
-              <div class="orbit-ring orb-b"></div>
-              <div class="orbit-ring orb-c"></div>
               <canvas id="neural-sphere"></canvas>
               <div class="sphere-glow"></div>
+              <div class="sphere-scan"></div>
               <div class="sphere-label">
                 <span class="sl-title">J.A.R.V.I.S</span>
                 <span class="sl-sub">LOG DIAGNOSTIC CORE</span>
@@ -158,44 +131,58 @@
 
             <div class="welcome-copy">
               <span class="welcome-kicker">MONITORAMENTO INTELIGENTE</span>
-              <h1>Investigue automacoes com base em logs reais.</h1>
               <p>Jarvis consulta eventos em tempo real, historico e contexto operacional antes de responder sobre falhas, execucoes e status.</p>
             </div>
 
             <div class="quick-cards" id="quick-suggestions">
               <button class="qcard" data-msg="Quais erros ocorreram hoje nas automacoes monitoradas?">
-                <span class="qcard-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>
-                </span>
+                <span class="qcard-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg></span>
                 <span class="qcard-title">ERROS</span>
                 <span class="qcard-desc">Resumo dos erros mais recentes</span>
-                <span class="qcard-arrow">-&gt;</span>
+                <span class="qcard-arrow">→</span>
               </button>
               <button class="qcard" data-msg="Qual foi a ultima execucao da automacao acompanhamento-meta e houve falhas?">
-                <span class="qcard-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-                </span>
+                <span class="qcard-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>
                 <span class="qcard-title">EXECUCAO</span>
                 <span class="qcard-desc">Diagnosticar uma automacao especifica</span>
-                <span class="qcard-arrow">-&gt;</span>
+                <span class="qcard-arrow">→</span>
               </button>
               <button class="qcard" data-msg="Liste os eventos WARN e ERROR mais relevantes das ultimas horas com runId e errorCode quando houver.">
-                <span class="qcard-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                </span>
+                <span class="qcard-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>
                 <span class="qcard-title">TRIAGEM</span>
                 <span class="qcard-desc">Priorizar eventos criticos</span>
-                <span class="qcard-arrow">-&gt;</span>
+                <span class="qcard-arrow">→</span>
               </button>
               <button class="qcard" data-msg="A partir dos logs disponiveis, explique o que aconteceu com a automacao financeiro hoje.">
-                <span class="qcard-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                </span>
+                <span class="qcard-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
                 <span class="qcard-title">INCIDENTE</span>
                 <span class="qcard-desc">Reconstruir o contexto de uma falha</span>
-                <span class="qcard-arrow">-&gt;</span>
+                <span class="qcard-arrow">→</span>
               </button>
             </div>
+          </div>
+        </section>
+
+        <!-- ══ Painel de automações ══ -->
+        <section class="automations-panel" id="automations-panel" hidden>
+          <div class="ap-header">
+            <div class="ap-header-left">
+              <button class="ap-back-btn" id="ap-back-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="15 18 9 12 15 6"/></svg>
+                CHAT
+              </button>
+              <div>
+                <div class="ap-title">AUTOMAÇÕES MONITORADAS</div>
+                <div class="ap-subtitle">STATUS EM TEMPO REAL • CLIQUE PARA DIAGNOSTICAR</div>
+              </div>
+            </div>
+            <button class="ap-refresh-btn" id="ap-refresh-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.06-4.43"/></svg>
+              ATUALIZAR
+            </button>
+          </div>
+          <div class="ap-grid" id="ap-grid">
+            <div class="ap-loading">CARREGANDO AUTOMAÇÕES...</div>
           </div>
         </section>
 
@@ -205,26 +192,14 @@
           <span class="typing-text">PROCESSANDO...</span>
         </div>
 
-        <footer class="input-area">
+        <footer class="input-area" id="input-area">
           <div class="input-container">
             <button class="input-side-btn" title="Voz" disabled>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
             </button>
-            <textarea
-              id="message-input"
-              class="message-input"
-              placeholder="Pergunte sobre logs, erros, execucoes ou status das automacoes..."
-              rows="1"
-              maxlength="8000"
-            ></textarea>
+            <textarea id="message-input" class="message-input" placeholder="Pergunte sobre logs, erros, execucoes ou status das automacoes..." rows="1" maxlength="8000"></textarea>
             <div class="input-right">
               <span class="char-counter" id="char-counter">0/8000</span>
-              <button class="input-side-btn" title="Anexar" disabled>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66L9.41 17.41a2 2 0 0 1-2.83-2.83l8.49-8.49"/></svg>
-              </button>
-              <button class="input-side-btn" title="Voz" disabled>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-              </button>
               <button id="send-button" class="send-button" title="Transmitir" disabled>
                 <svg class="send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                 <svg class="loading-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" hidden><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
@@ -232,13 +207,36 @@
             </div>
           </div>
           <div class="input-hint-bar">
-            <span>ENTER ENVIAR • SHIFT + ENTER NOVA LINHA • DIAGNOSTICO BASEADO EM LOGS</span>
+            <span>ENTER ENVIAR • SHIFT + ENTER NOVA LINHA • DIAGNÓSTICO BASEADO EM LOGS REAIS</span>
           </div>
         </footer>
       </main>
 
       <aside class="right-sidebar" id="right-sidebar">
-
+        <!-- NÚCLEO JARVIS -->
+        <div class="rs-card">
+          <div class="rs-card-title">NÚCLEO JARVIS</div>
+          <div class="rs-core-status">
+            <span class="rs-core-dot" id="rs-status-dot"></span>
+            <span class="rs-core-text" id="rs-status-text">VERIFICANDO...</span>
+          </div>
+          <div class="rs-divider"></div>
+          <div class="rs-data-grid">
+            <div class="rs-data-item">
+              <span class="rs-data-label">PROVEDOR LLM</span>
+              <span class="rs-data-value rs-data-value--accent">GROQ</span>
+            </div>
+            <div class="rs-data-item">
+              <span class="rs-data-label">LATÊNCIA</span>
+              <span class="rs-data-value" id="rs-latency">—</span>
+            </div>
+            <div class="rs-data-item rs-data-item--full">
+              <span class="rs-data-label">UPTIME DA SESSÃO</span>
+              <span class="rs-data-value" id="rs-uptime">00:00:00</span>
+            </div>
+          </div>
+        </div>
+        <!-- AUTOMAÇÕES (mini-lista) -->
         <div class="rs-card" id="rs-monitor-card">
           <div class="rs-card-title">
             AUTOMAÇÕES
@@ -248,75 +246,26 @@
             <div class="monitor-loading">CARREGANDO...</div>
           </div>
         </div>
-
-        <div class="rs-card">
-          <div class="rs-card-title">NUCLEO IA</div>
-          <div class="radial-progress">
-            <svg viewBox="0 0 80 80">
-              <circle class="rp-track" cx="40" cy="40" r="30"/>
-              <circle class="rp-fill"  cx="40" cy="40" r="30" stroke-dasharray="188.5" stroke-dashoffset="15.08"/>
-            </svg>
-            <div class="rp-center">
-              <span class="rp-value">92%</span>
-              <span class="rp-label">GROQ</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="rs-card">
-          <div class="rs-card-title">STATUS</div>
-          <div class="rs-status-row">
-            <span class="rs-status-dot" id="rs-status-dot"></span>
-            <span class="rs-status-text" id="rs-status-text">INICIANDO</span>
-          </div>
-        </div>
-
-        <div class="rs-card">
-          <div class="rs-card-title">CONTEXTO DE LOGS</div>
-          <div class="rs-info-stack">
-            <div class="rs-info-row">
-              <span class="rs-info-label">FONTE</span>
-              <span class="rs-info-val" id="rs-source">CARREGANDO</span>
-            </div>
-            <div class="rs-info-row">
-              <span class="rs-info-label">MODO</span>
-              <span class="rs-info-val" id="rs-mode">-</span>
-            </div>
-            <div class="rs-info-row">
-              <span class="rs-info-label">EVENTOS</span>
-              <span class="rs-info-val" id="rs-events">0</span>
-            </div>
-            <div class="rs-info-row">
-              <span class="rs-info-label">ULTIMO EVENTO</span>
-              <span class="rs-info-val rs-info-val-small" id="rs-last-event">SEM DADOS</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="rs-card rs-card-map">
-          <div class="rs-card-title">CONEXAO</div>
-          <div class="rs-map-container">
-            <div class="rs-map-bg" aria-hidden="true">
-              <canvas id="world-map-canvas"></canvas>
-            </div>
-            <div class="rs-map-pin"></div>
-            <div class="rs-map-ripple r1"></div>
-            <div class="rs-map-ripple r2"></div>
-          </div>
-          <div class="rs-info-row">
-            <span class="rs-info-label">LATENCIA</span>
-            <span class="rs-info-val" id="rs-latency">18ms</span>
-          </div>
-        </div>
-
-        <div class="rs-card">
-          <div class="rs-card-title">CRIATIVIDADE <span class="rs-val" id="temperature-value">0.7</span></div>
-          <input type="range" id="temperature-slider" min="0" max="1" step="0.1" value="0.7" class="config-slider" />
-          <div class="slider-labels"><span>PRECISO</span><span>CRIATIVO</span></div>
-        </div>
       </aside>
     </div>
   </div>
+
+  <!-- Navegação mobile (rodapé fixo, visível apenas em telas pequenas) -->
+  <nav class="mobile-nav" id="mobile-nav" aria-label="Navegação principal">
+    <button class="mob-btn active" id="mob-nav-jarvis">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="22" height="22">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      </svg>
+      <span>JARVIS</span>
+    </button>
+    <button class="mob-btn" id="mob-nav-automacoes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="22" height="22">
+        <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+        <rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 17.5h7M17.5 14v7"/>
+      </svg>
+      <span>AUTOMAÇÕES</span>
+    </button>
+  </nav>
 
   <div id="toast-container" class="toast-container"></div>
   <script src="js/app.js"></script>

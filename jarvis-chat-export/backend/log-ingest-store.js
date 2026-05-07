@@ -181,6 +181,55 @@ function rowToEvent(row) {
   };
 }
 
+function normalizeText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildAutomationVariants(event) {
+  const variants = new Set();
+  if (event.automation) variants.add(event.automation);
+  if (event.meta && event.meta.script) variants.add(event.meta.script);
+  return Array.from(variants)
+    .map(normalizeText)
+    .filter(Boolean);
+}
+
+function detectAutomationFromEvents(userMessage, events) {
+  const normalizedMessage = normalizeText(userMessage);
+  if (!normalizedMessage) return null;
+
+  const automations = new Map();
+  for (const event of events) {
+    if (!event.automation || automations.has(event.automation)) continue;
+    automations.set(event.automation, buildAutomationVariants(event));
+  }
+
+  let bestMatch = null;
+  for (const [automation, variants] of automations.entries()) {
+    for (const variant of variants) {
+      if (!variant) continue;
+      const exactish =
+        normalizedMessage.includes(variant) ||
+        variant.includes(normalizedMessage);
+      if (exactish) {
+        const score = variant.length;
+        if (!bestMatch || score > bestMatch.score) {
+          bestMatch = { automation, score, variant };
+        }
+      }
+    }
+  }
+
+  return bestMatch ? bestMatch.automation : null;
+}
+
 async function appendEvents(payload) {
   const rawEvents = expandPayloadToEvents(payload);
   const normalized = rawEvents
@@ -377,11 +426,14 @@ async function queryEvents(options = {}) {
   return rows.map(rowToEvent);
 }
 
-function buildContextFromEvents(events) {
+function buildContextFromEvents(events, focusAutomation = null) {
   const lines = [];
   lines.push(`FONTE PRIMARIA: LOGS EM TEMPO REAL (BANCO ${getStorageMode().toUpperCase()})`);
   lines.push("Use esses eventos como verdade principal para automacoes, erros, execucoes e status.");
   lines.push("Se faltar evidencia nesses eventos, declare claramente.");
+  if (focusAutomation) {
+    lines.push(`AUTOMACAO EM FOCO: ${focusAutomation}`);
+  }
   lines.push("");
 
   for (const event of events) {
@@ -402,15 +454,28 @@ function buildContextFromEvents(events) {
 async function getPromptContext(userMessage) {
   const maxEvents = Math.max(1, getEnvInt("LOG_INGEST_MAX_CONTEXT_EVENTS", 60));
   const search = userMessage && userMessage.length > 4 ? userMessage : null;
+  const recentEvents = await queryEvents({ limit: Math.max(maxEvents * 3, 120) });
+  const detectedAutomation = detectAutomationFromEvents(userMessage, recentEvents);
 
-  const focused = await queryEvents({ search, limit: maxEvents });
-  const events = focused.length > 0 ? focused : await queryEvents({ limit: maxEvents });
+  let events = [];
+  if (detectedAutomation) {
+    events = await queryEvents({ automation: detectedAutomation, limit: maxEvents });
+  }
+
+  if (events.length === 0 && search) {
+    events = await queryEvents({ search, limit: maxEvents });
+  }
+
+  if (events.length === 0) {
+    events = recentEvents.slice(0, maxEvents);
+  }
 
   return {
     source: POSTGRES_URL ? "postgres-ingest" : "sqlite-ingest",
     files: events.length,
-    context: buildContextFromEvents(events),
+    context: buildContextFromEvents(events, detectedAutomation),
     events,
+    focusAutomation: detectedAutomation,
   };
 }
 

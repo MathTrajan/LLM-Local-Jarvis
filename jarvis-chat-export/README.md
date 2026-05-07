@@ -1,41 +1,46 @@
-# Jarvis — Agente de Observabilidade para Automações Windows
+# Jarvis - Agente de Observabilidade para Automacoes Windows
 
-Agente operacional que recebe logs estruturados de automações PowerShell, armazena em banco Postgres e responde perguntas com base em evidências reais de execução.
+Agente operacional que recebe logs estruturados de automacoes PowerShell, armazena eventos em SQLite/Postgres e responde perguntas com base em evidencias reais de execucao.
 
-**Produção:** [https://jarvis-observability.vercel.app](https://jarvis-observability.vercel.app)
+**URL publica alvo:** [https://jarvis-observability.vercel.app](https://jarvis-observability.vercel.app)
+
+> Revalide `/api/health`, `/api/info` e `/api/logs-debug` antes de depender do ambiente publico para testes.
 
 ---
 
 ## Estrutura do Projeto
 
-```
+```text
 jarvis-chat-export/
-├── backend/
-│   ├── server.js              ← Servidor Express (entry point)
-│   ├── agent.js               ← Lógica do agente e roteamento
-│   ├── config.js              ← Helpers centralizados de variáveis de ambiente
-│   ├── log-context.js         ← Leitura de logs (Google Drive + fallback local)
-│   ├── log-ingest-store.js    ← HTTP ingest + persistência Postgres/SQLite
-│   ├── providers/
-│   │   └── groq.js            ← Integração com Groq SDK
-│   ├── public/                ← Frontend servido pelo Express (deploy Vercel)
-│   │   ├── index.html
-│   │   ├── css/style.css
-│   │   └── js/app.js
-│   ├── .env.example           ← Template de variáveis de ambiente
-│   └── package.json
-├── frontend/                  ← Fonte de trabalho visual (espelhado em public/)
-└── .gitignore
+|-- backend/
+|   |-- server.js
+|   |-- agent.js
+|   |-- config.js
+|   |-- log-context.js
+|   |-- log-ingest-store.js
+|   |-- providers/
+|   |   `-- groq.js
+|   |-- public/
+|   |   |-- index.html
+|   |   |-- css/style.css
+|   |   `-- js/app.js
+|   |-- .env.example
+|   `-- package.json
+|-- frontend/
+|   |-- index.html
+|   |-- css/style.css
+|   `-- js/app.js
+`-- .gitignore
 ```
 
 ---
 
-## Instalação Local
+## Instalacao Local
 
-### Pré-requisitos
+### Pre-requisitos
 
 - Node.js v18+
-- Chave de API Groq válida → [console.groq.com](https://console.groq.com)
+- Chave de API Groq valida
 
 ### Passos
 
@@ -47,13 +52,13 @@ npm install
 npm start
 ```
 
-Acesse: **http://localhost:3000**
+Acesse: `http://localhost:3000`
 
 ---
 
-## Variáveis de Ambiente
+## Variaveis de Ambiente
 
-Todas as variáveis são lidas via `config.js`, com trim automático para evitar erros de `\r\n`.
+Todas as variaveis sao lidas via `config.js`, com trim automatico para evitar erros de `\r\n`.
 
 ```env
 # Servidor
@@ -61,7 +66,7 @@ PORT=3000
 AGENT_ROUTING_STRATEGY=auto
 ALLOWED_ORIGIN=*
 
-# Groq (provedor LLM)
+# Groq
 GROQ_API_KEY_1=
 GROQ_API_KEY_2=
 GROQ_MODEL_1=llama-3.3-70b-versatile
@@ -72,34 +77,35 @@ LOG_INGEST_ENABLED=true
 LOG_INGEST_API_TOKEN=troque-por-um-token-seguro
 LOG_INGEST_MAX_CONTEXT_EVENTS=60
 
-# Banco de dados (produção — Neon Postgres)
+# Banco de dados em producao
 DATABASE_URL=postgresql://user:password@host/db?sslmode=require
 
-# Banco de dados (local — SQLite, usado quando DATABASE_URL está vazio)
-# LOG_DB_FILE=C:\\caminho\\jarvis-logs.db
+# Banco local opcional
+# LOG_DB_FILE=C:\caminho\jarvis-logs.db
 
-# Logs via Google Drive (fallback opcional)
+# Fallback de logs
 GOOGLE_DRIVE_FOLDER_ID=
 GOOGLE_SERVICE_ACCOUNT_JSON=
-
-# Logs via pasta local (fallback opcional)
-LOG_LOCAL_DIR=G:\\Meu Drive\\Log
+LOG_LOCAL_DIR=G:\Meu Drive\Log
 ```
 
-> **Nunca commite o arquivo `.env`.** Ele está no `.gitignore`.
+> Nunca commite o arquivo `.env`.
 
 ---
 
-## Deploy em Produção (Vercel + Neon)
+## Deploy em Producao
 
-1. Crie um banco gratuito em [neon.tech](https://neon.tech) e copie a connection string
-2. No painel Vercel do projeto, configure:
-   - `DATABASE_URL` = string de conexão Neon
-   - `LOG_INGEST_API_TOKEN` = token secreto
-   - `GROQ_API_KEY_1` e `GROQ_API_KEY_2`
+Recomendado: `Vercel + Neon`
+
+1. Criar banco no Neon
+2. Configurar no painel da Vercel:
+   - `DATABASE_URL`
+   - `LOG_INGEST_API_TOKEN`
+   - `GROQ_API_KEY_1`
+   - `GROQ_API_KEY_2`
    - `AGENT_ROUTING_STRATEGY=auto`
-3. Faça redeploy
-4. Valide os endpoints:
+3. Fazer redeploy
+4. Validar:
 
 ```bash
 curl https://jarvis-observability.vercel.app/api/health
@@ -107,25 +113,30 @@ curl https://jarvis-observability.vercel.app/api/info
 curl https://jarvis-observability.vercel.app/api/logs-debug
 ```
 
-`/api/info` deve retornar `"logs": { "mode": "postgres" }`.
+Esperado:
+
+- `/api/info` com `logs.mode = "postgres"`
 
 ---
 
-## Integração com Automações Windows
+## Integracao com Automacoes Windows
 
-Scripts PowerShell nas automações enviam eventos estruturados ao Jarvis ao final de cada execução.
+Os scripts operacionais sao locais e nao devem subir para o Git. Eles seguem um padrao unico:
 
-**Configurar variáveis no servidor Windows (como Administrador):**
+- mantem o `.txt` original
+- mantem a saida visual no console
+- acumulam eventos estruturados em memoria
+- enviam o lote para `POST /api/log-ingest` ao final da execucao
+
+### Variaveis no servidor Windows
 
 ```powershell
 [Environment]::SetEnvironmentVariable("JARVIS_INGEST_URL", "https://jarvis-observability.vercel.app/api/log-ingest", "Machine")
-[Environment]::SetEnvironmentVariable("JARVIS_INGEST_API_TOKEN", "<mesmo token configurado na Vercel>", "Machine")
-
-# Verificar
+[Environment]::SetEnvironmentVariable("JARVIS_INGEST_API_TOKEN", "<mesmo token configurado no backend>", "Machine")
 Get-ChildItem Env:JARVIS*
 ```
 
-**Formato do payload enviado pelos scripts:**
+### Formato do payload
 
 ```json
 {
@@ -134,13 +145,14 @@ Get-ChildItem Env:JARVIS*
       "timestamp": "2026-05-07T14:00:00.000Z",
       "automation": "Programacao_de_Pedidos",
       "level": "INFO",
-      "message": "[STATUS] RefreshAll concluído.",
+      "message": "[STATUS] RefreshAll concluido.",
       "runId": "ProgramacaoPedidos-20260507-140000",
       "status": "running",
       "tags": ["excel", "powerquery"],
       "meta": {
         "host": "SERVIDOR-WIN",
-        "user": "automacao"
+        "user": "automacao",
+        "script": "Programacao de Pedidos"
       }
     }
   ]
@@ -151,26 +163,41 @@ Get-ChildItem Env:JARVIS*
 
 ## Endpoints da API
 
-| Método | Endpoint | Descrição |
+| Metodo | Endpoint | Descricao |
 |---|---|---|
 | POST | `/api/chat` | Conversa operacional com o Jarvis |
 | GET | `/api/health` | Status do provedor LLM |
-| POST | `/api/log-ingest` | Ingestão de logs estruturados |
+| POST | `/api/log-ingest` | Ingestao de logs estruturados |
 | GET | `/api/logs/query` | Consulta protegida de eventos |
-| GET | `/api/logs-debug` | Diagnóstico da fonte de logs e ingestão |
-| GET | `/api/info` | Configuração atual do backend |
+| GET | `/api/logs-debug` | Diagnostico da fonte de logs e ingestao |
+| GET | `/api/info` | Configuracao atual do backend |
 
 ---
 
-## Segurança
+## Comportamento do Jarvis
 
-- Chaves de API lidas exclusivamente via variáveis de ambiente
-- `LOG_INGEST_API_TOKEN` obrigatório para aceitar eventos no endpoint de ingestão
+Quando a pergunta menciona uma automacao, o backend tenta detectar esse nome a partir dos eventos ingeridos e prioriza o contexto dessa rotina.
+
+Exemplos:
+
+- `o que aconteceu na Programacao de Pedidos hoje?`
+- `como foi a automacao Pedidos em Carga?`
+
+Se nenhuma automacao for identificada na pergunta, Jarvis cai para busca textual geral e depois para eventos mais recentes.
+
+Se nao houver evidencia suficiente, a resposta correta e dizer que nao encontrou isso nos logs disponiveis.
+
+---
+
+## Seguranca
+
+- chaves de API apenas em variaveis de ambiente
+- `LOG_INGEST_API_TOKEN` obrigatorio para ingestao
 - `.env` protegido pelo `.gitignore`
-- Scripts de automação não são versionados no repositório
+- scripts de automacao sao de uso interno e nao devem subir para o Git
 
 ---
 
-## Licença
+## Licenca
 
-MIT License — Uso livre para fins educacionais e comerciais.
+MIT License

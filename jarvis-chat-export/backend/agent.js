@@ -107,6 +107,7 @@ async function processMessage(userMessage, conversationHistory = [], options = {
     return buildResponse(result, routing.primaryName, false, latency, null, {
       logSource: logContext.source,
       logFiles: logContext.files,
+      focusAutomation: logContext.focusAutomation || null,
     });
 
   } catch (primaryError) {
