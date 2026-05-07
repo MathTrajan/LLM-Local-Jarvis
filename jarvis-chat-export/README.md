@@ -1,299 +1,176 @@
-# 🤖 Jarvis Chat — Assistente Virtual com Groq
+# Jarvis — Agente de Observabilidade para Automações Windows
 
-Interface web de chat para o agente virtual **Jarvis**, com integração ao provedor **Groq**, sistema de fallback simplificado e design moderno dark-theme.
+Agente operacional que recebe logs estruturados de automações PowerShell, armazena em banco Postgres e responde perguntas com base em evidências reais de execução.
+
+**Produção:** [https://jarvis-observability.vercel.app](https://jarvis-observability.vercel.app)
 
 ---
 
-## 📁 Estrutura do Projeto
+## Estrutura do Projeto
 
 ```
-jarvis-chat/
+jarvis-chat-export/
 ├── backend/
 │   ├── server.js              ← Servidor Express (entry point)
-│   ├── agent.js               ← Lógica do agente + roteamento
+│   ├── agent.js               ← Lógica do agente e roteamento
+│   ├── config.js              ← Helpers centralizados de variáveis de ambiente
+│   ├── log-context.js         ← Leitura de logs (Google Drive + fallback local)
+│   ├── log-ingest-store.js    ← HTTP ingest + persistência Postgres/SQLite
 │   ├── providers/
 │   │   └── groq.js            ← Integração com Groq SDK
-│   ├── .env                   ← Variáveis de ambiente (NÃO commite!)
-│   ├── .env.example           ← Template das variáveis de ambiente
+│   ├── public/                ← Frontend servido pelo Express (deploy Vercel)
+│   │   ├── index.html
+│   │   ├── css/style.css
+│   │   └── js/app.js
+│   ├── .env.example           ← Template de variáveis de ambiente
 │   └── package.json
-├── frontend/
-│   ├── index.html             ← Página principal do chat
-│   ├── css/
-│   │   └── style.css          ← Estilos (dark theme)
-│   └── js/
-│       └── app.js             ← Lógica do frontend
-├── .gitignore
-└── README.md
+├── frontend/                  ← Fonte de trabalho visual (espelhado em public/)
+└── .gitignore
 ```
 
 ---
 
-## 🚀 Instalação e Execução
+## Instalação Local
 
 ### Pré-requisitos
 
-- **Node.js** v18+ → https://nodejs.org
-- **npm** v8+ (incluído com o Node.js)
-- Chaves de API válidas para OpenAI e/ou Google Gemini
+- Node.js v18+
+- Chave de API Groq válida → [console.groq.com](https://console.groq.com)
+
+### Passos
+
+```bash
+cd jarvis-chat-export/backend
+cp .env.example .env
+# preencha ao menos GROQ_API_KEY_1 e LOG_INGEST_API_TOKEN
+npm install
+npm start
+```
+
+Acesse: **http://localhost:3000**
 
 ---
 
-### 1️⃣ Clone ou baixe o projeto
+## Variáveis de Ambiente
 
-```bash
-# Via git
-git clone https://github.com/seu-usuario/jarvis-chat.git
-cd jarvis-chat
-
-# Ou extraia o ZIP baixado e entre na pasta
-cd jarvis-chat
-```
-
----
-
-### 2️⃣ Configure as variáveis de ambiente
-
-```bash
-# Acesse a pasta do backend
-cd backend
-
-# Copie o arquivo de exemplo
-copy .env.example .env
-```
-
-Abra o arquivo `.env` com seu editor e preencha as chaves principais:
+Todas as variáveis são lidas via `config.js`, com trim automático para evitar erros de `\r\n`.
 
 ```env
-GROQ_API_KEY_1=SuaChaveGroqAqui
+# Servidor
 PORT=3000
 AGENT_ROUTING_STRATEGY=auto
-DATABASE_URL=SuaStringDeConexaoNeonAqui
-LOG_INGEST_API_TOKEN=jarvis_ingest_token_2026_change_me
+ALLOWED_ORIGIN=*
+
+# Groq (provedor LLM)
+GROQ_API_KEY_1=
+GROQ_API_KEY_2=
+GROQ_MODEL_1=llama-3.3-70b-versatile
+GROQ_MODEL_2=llama-3.1-8b-instant
+
+# HTTP Ingest
+LOG_INGEST_ENABLED=true
+LOG_INGEST_API_TOKEN=troque-por-um-token-seguro
+LOG_INGEST_MAX_CONTEXT_EVENTS=60
+
+# Banco de dados (produção — Neon Postgres)
+DATABASE_URL=postgresql://user:password@host/db?sslmode=require
+
+# Banco de dados (local — SQLite, usado quando DATABASE_URL está vazio)
+# LOG_DB_FILE=C:\\caminho\\jarvis-logs.db
+
+# Logs via Google Drive (fallback opcional)
+GOOGLE_DRIVE_FOLDER_ID=
+GOOGLE_SERVICE_ACCOUNT_JSON=
+
+# Logs via pasta local (fallback opcional)
+LOG_LOCAL_DIR=G:\\Meu Drive\\Log
 ```
 
-> ⚠️ **NUNCA** commite o arquivo `.env` no Git. Ele já está no `.gitignore`.
-
-> 💡 Se estiver usando Vercel em produção, defina `DATABASE_URL` e `LOG_INGEST_API_TOKEN` diretamente no painel de variáveis de ambiente do projeto.
+> **Nunca commite o arquivo `.env`.** Ele está no `.gitignore`.
 
 ---
 
-### 3️⃣ Instale as dependências
+## Deploy em Produção (Vercel + Neon)
 
-```bash
-# Na pasta backend/
-npm install
-```
-
----
-
-### 4️⃣ Inicie o servidor
-
-```bash
-# Modo produção
-npm start
-
-# Modo desenvolvimento (reinicia automaticamente ao salvar)
-npm run dev
-```
-
-Acesse no navegador: **http://localhost:3000**
-
----
-
-## 📄 Logs de Automação (Google Drive)
-
-O Jarvis agora pode usar automaticamente arquivos `.txt` de logs como fonte primária para responder sobre:
-- erros
-- execuções
-- status geral do ambiente
-- saúde das automações
-
-### Configuração recomendada (Google Drive API)
-
-No `backend/.env`:
-
-```env
-GOOGLE_DRIVE_FOLDER_ID=1B3Hv1fTVAnU4MV2aYfiMqPT1BFq7pire
-GOOGLE_SERVICE_ACCOUNT_JSON={"type":"service_account", ...}
-```
-
-Notas importantes:
-- compartilhe a pasta do Drive com o e-mail da Service Account (permissão de leitura)
-- os arquivos devem estar em formato `.txt`
-- o Jarvis lê os logs mais recentes e injeta esse contexto automaticamente no chat
-
-### Fallback local (Drive sincronizado no desktop)
-
-Se preferir usar a pasta local sincronizada do Google Drive:
-
-```env
-LOG_LOCAL_DIR=C:\\caminho\\para\\pasta\\de\\logs
-```
-
----
-
-## 🚀 Implantação em Vercel + Neon
-
-1. Crie o projeto no Vercel ou use o projeto existente `jarvis-observability`.
-2. Configure as variáveis:
+1. Crie um banco gratuito em [neon.tech](https://neon.tech) e copie a connection string
+2. No painel Vercel do projeto, configure:
    - `DATABASE_URL` = string de conexão Neon
-   - `LOG_INGEST_API_TOKEN` = token secreto para `/api/log-ingest`
-   - `GROQ_API_KEY_1` / `GROQ_API_KEY_2`
+   - `LOG_INGEST_API_TOKEN` = token secreto
+   - `GROQ_API_KEY_1` e `GROQ_API_KEY_2`
    - `AGENT_ROUTING_STRATEGY=auto`
-3. Faça deploy.
-4. Confirme os endpoints:
-   - `/api/info`
-   - `/api/health`
-   - `/api/logs-debug`
+3. Faça redeploy
+4. Valide os endpoints:
 
-> Após a implantação, no servidor Windows, configure também:
-> - `JARVIS_INGEST_URL=https://jarvis-observability.vercel.app/api/log-ingest`
-> - `JARVIS_INGEST_API_TOKEN=<mesmo token em Vercel>`
+```bash
+curl https://jarvis-observability.vercel.app/api/health
+curl https://jarvis-observability.vercel.app/api/info
+curl https://jarvis-observability.vercel.app/api/logs-debug
+```
 
----
-
-## 🔑 Onde obter as chaves de API
-
-| Provedor | URL | Plano gratuito |
-|----------|-----|----------------|
-| OpenAI   | https://platform.openai.com/api-keys | Crédito inicial |
-| Google Gemini | https://aistudio.google.com/app/apikey | Sim (gratuito) |
+`/api/info` deve retornar `"logs": { "mode": "postgres" }`.
 
 ---
 
-## ⚙️ Configurações Disponíveis
+## Integração com Automações Windows
 
-### Variáveis de Ambiente (`.env`)
+Scripts PowerShell nas automações enviam eventos estruturados ao Jarvis ao final de cada execução.
 
-| Variável | Descrição | Padrão |
-|----------|-----------|--------|
-| `OPENAI_API_KEY` | Chave da API OpenAI | — |
-| `GEMINI_API_KEY` | Chave da API Gemini | — |
-| `PORT` | Porta do servidor | `3000` |
-| `AGENT_ROUTING_STRATEGY` | Estratégia de roteamento | `auto` |
-| `OPENAI_MODEL` | Modelo OpenAI a usar | `gpt-4o-mini` |
-| `GEMINI_MODEL` | Modelo Gemini a usar | `gemini-1.5-flash` |
-| `ALLOWED_ORIGIN` | Origem CORS permitida | `*` |
+**Configurar variáveis no servidor Windows (como Administrador):**
 
-### Estratégias de Roteamento
+```powershell
+[Environment]::SetEnvironmentVariable("JARVIS_INGEST_URL", "https://jarvis-observability.vercel.app/api/log-ingest", "Machine")
+[Environment]::SetEnvironmentVariable("JARVIS_INGEST_API_TOKEN", "<mesmo token configurado na Vercel>", "Machine")
 
-| Estratégia | Comportamento |
-|------------|---------------|
-| `auto` | Tenta OpenAI → fallback Gemini se falhar |
-| `openai` | Sempre OpenAI → fallback Gemini |
-| `gemini` | Sempre Gemini → fallback OpenAI |
-| `round-robin` | Alterna entre os dois provedores |
+# Verificar
+Get-ChildItem Env:JARVIS*
+```
+
+**Formato do payload enviado pelos scripts:**
+
+```json
+{
+  "events": [
+    {
+      "timestamp": "2026-05-07T14:00:00.000Z",
+      "automation": "Programacao_de_Pedidos",
+      "level": "INFO",
+      "message": "[STATUS] RefreshAll concluído.",
+      "runId": "ProgramacaoPedidos-20260507-140000",
+      "status": "running",
+      "tags": ["excel", "powerquery"],
+      "meta": {
+        "host": "SERVIDOR-WIN",
+        "user": "automacao"
+      }
+    }
+  ]
+}
+```
 
 ---
 
-## 🔒 Segurança
-
-- ✅ Chaves de API lidas **exclusivamente** via variáveis de ambiente
-- ✅ Chaves **nunca** aparecem no frontend ou logs
-- ✅ Helmet.js para headers HTTP seguros
-- ✅ Rate limiting: 30 mensagens/minuto por IP
-- ✅ CORS configurável por origem
-- ✅ Validação de input no backend
-- ✅ `.gitignore` protegendo o `.env`
-
----
-
-## 🌐 Endpoints da API
+## Endpoints da API
 
 | Método | Endpoint | Descrição |
-|--------|----------|-----------|
-| `POST` | `/api/chat` | Envia mensagem ao Jarvis |
-| `GET`  | `/api/health` | Status dos provedores |
-| `GET`  | `/api/info` | Informações do servidor |
-
-### Exemplo de requisição `/api/chat`
-
-```json
-POST /api/chat
-Content-Type: application/json
-
-{
-  "message": "Olá Jarvis, como vai?",
-  "history": [],
-  "options": {
-    "strategy": "auto",
-    "temperature": 0.7
-  }
-}
-```
-
-### Resposta
-
-```json
-{
-  "text": "Olá! Estou funcionando perfeitamente...",
-  "provider": "openai",
-  "model": "gpt-4o-mini",
-  "usedFallback": false,
-  "latencyMs": 847,
-  "timestamp": "2025-01-01T12:00:00.000Z"
-}
-```
+|---|---|---|
+| POST | `/api/chat` | Conversa operacional com o Jarvis |
+| GET | `/api/health` | Status do provedor LLM |
+| POST | `/api/log-ingest` | Ingestão de logs estruturados |
+| GET | `/api/logs/query` | Consulta protegida de eventos |
+| GET | `/api/logs-debug` | Diagnóstico da fonte de logs e ingestão |
+| GET | `/api/info` | Configuração atual do backend |
 
 ---
 
-## 🖥️ Funcionalidades da Interface
+## Segurança
 
-- 💬 Chat em tempo real com histórico de conversa
-- 🌙 Dark theme profissional inspirado em IA
-- 📱 Design responsivo (desktop, tablet, mobile)
-- ⚡ Indicador de qual provedor respondeu cada mensagem
-- ↩️ Notificação visual quando fallback é ativado
-- 🔄 Health check dos provedores na sidebar
-- ⚙️ Controles de roteamento e temperatura em tempo real
-- 🗑️ Botão para limpar conversa
-- ⌨️ Enter para enviar, Shift+Enter para nova linha
-- 📝 Suporte a Markdown nas respostas (código, tabelas, listas)
-- 💡 Sugestões rápidas na tela inicial
+- Chaves de API lidas exclusivamente via variáveis de ambiente
+- `LOG_INGEST_API_TOKEN` obrigatório para aceitar eventos no endpoint de ingestão
+- `.env` protegido pelo `.gitignore`
+- Scripts de automação não são versionados no repositório
 
 ---
 
-## 🛠️ Dependências
-
-### Backend
-| Pacote | Versão | Uso |
-|--------|--------|-----|
-| `express` | ^4.18 | Servidor HTTP |
-| `dotenv` | ^16.3 | Variáveis de ambiente |
-| `openai` | ^4.28 | SDK oficial OpenAI |
-| `@google/generative-ai` | ^0.7 | SDK oficial Gemini |
-| `cors` | ^2.8 | Cross-Origin Resource Sharing |
-| `helmet` | ^7.1 | Segurança HTTP |
-| `express-rate-limit` | ^7.1 | Rate limiting |
-| `nodemon` | ^3.0 | Auto-reload em desenvolvimento |
-
----
-
-## 📋 Scripts disponíveis
-
-```bash
-npm start    # Inicia em produção
-npm run dev  # Inicia com nodemon (desenvolvimento)
-```
-
----
-
-## 🔧 Troubleshooting
-
-**Erro: "OPENAI_API_KEY não está definida"**
-→ Verifique se o arquivo `.env` existe em `backend/` e se a chave está preenchida.
-
-**Erro: "Cannot find module 'openai'"**
-→ Execute `npm install` na pasta `backend/`.
-
-**Chat não carrega no navegador**
-→ Verifique se o servidor está rodando em http://localhost:3000
-
-**Gemini retorna erro 429**
-→ Limite de taxa atingido. Aguarde alguns minutos ou use estratégia `openai`.
-
----
-
-## 📄 Licença
+## Licença
 
 MIT License — Uso livre para fins educacionais e comerciais.
