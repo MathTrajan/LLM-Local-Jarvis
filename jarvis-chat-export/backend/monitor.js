@@ -74,7 +74,10 @@ function getLastExpectedRun(schedule, nowUtc) {
   const nowLocal = toLocal(nowUtc);
   const candidates = [];
 
-  for (let offset = 0; offset <= 1; offset++) {
+  // Mensais precisam de lookback maior (até 31 dias) para achar o último dia agendado
+  const maxDaysBack = schedule.type === "monthly" ? 31 : 1;
+
+  for (let offset = 0; offset <= maxDaysBack; offset++) {
     const day = new Date(nowLocal);
     day.setDate(day.getDate() - offset);
 
@@ -94,6 +97,9 @@ function getLastExpectedRun(schedule, nowUtc) {
       const scheduledUtc = new Date(scheduledLocal.getTime() - TZ_OFFSET_MS);
       if (scheduledUtc <= nowUtc) candidates.push(scheduledUtc);
     }
+
+    // Para mensais: achou o dia mais recente, não precisa continuar
+    if (schedule.type === "monthly" && candidates.length > 0) break;
   }
 
   if (candidates.length === 0) return null;
