@@ -1018,10 +1018,8 @@ async function renderAutomationsPanel() {
 
 function setNavActive(view) {
   const isChat = view === "chat";
-  ["nav-jarvis", "mob-nav-jarvis"].forEach(id =>
-    document.getElementById(id)?.classList.toggle("active", isChat));
-  ["nav-automacoes", "mob-nav-automacoes"].forEach(id =>
-    document.getElementById(id)?.classList.toggle("active", !isChat));
+  document.getElementById("nav-jarvis")?.classList.toggle("active", isChat);
+  document.getElementById("nav-automacoes")?.classList.toggle("active", !isChat);
 }
 
 function showAutomations() {
@@ -1118,11 +1116,9 @@ function init() {
       sb.classList.remove("open");
   });
 
-  // Nav: sidebar + mobile
+  // Nav: sidebar
   document.getElementById("nav-jarvis")?.addEventListener("click", showChat);
   document.getElementById("nav-automacoes")?.addEventListener("click", showAutomations);
-  document.getElementById("mob-nav-jarvis")?.addEventListener("click", showChat);
-  document.getElementById("mob-nav-automacoes")?.addEventListener("click", showAutomations);
 
   document.getElementById("ap-back-btn")?.addEventListener("click", showChat);
   document.getElementById("ap-refresh-btn")?.addEventListener("click", renderAutomationsPanel);
