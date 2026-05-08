@@ -30,22 +30,12 @@
           <div class="orb-ring or-2"></div>
           <div class="orb-core">
             <svg viewBox="0 0 32 32" fill="none" class="jarvis-icon">
-              <!-- outer helmet frame -->
-              <path d="M16,1 L29,7.5 L29.5,21 L22,30 L10,30 L2.5,21 L3,7.5 Z"
-                    stroke="currentColor" stroke-width="1.15" fill="none" opacity="0.9"/>
-              <!-- inner face plate -->
-              <path d="M16,4.5 L25.5,9.5 L26,20 L20,27 L12,27 L6,20 L6.5,9.5 Z"
-                    stroke="currentColor" stroke-width="0.45" fill="none" opacity="0.28"/>
-              <!-- left eye slit -->
-              <path d="M6.5,16.5 L7,13.5 L14.8,12 L15.2,15 Z" fill="currentColor"/>
-              <!-- right eye slit -->
-              <path d="M16.8,15 L17.2,12 L25,13.5 L25.5,16.5 Z" fill="currentColor"/>
-              <!-- arc reactor -->
-              <path d="M16,23.5 L12.5,19.5 L19.5,19.5 Z"
-                    stroke="currentColor" stroke-width="0.9" fill="none" opacity="0.9"/>
-              <circle cx="16" cy="21.5" r="1.25" fill="currentColor"/>
-              <!-- chin -->
-              <path d="M12,27.5 L16,30 L20,27.5" stroke="currentColor" stroke-width="0.65" opacity="0.5"/>
+              <circle cx="16" cy="16" r="11.5" stroke="currentColor" stroke-width="1.4" opacity="0.85"/>
+              <circle cx="16" cy="16" r="7.5"  stroke="currentColor" stroke-width="1"   opacity="0.65"/>
+              <polygon points="16,9.8 20.7,12.4 20.7,19.6 16,22.2 11.3,19.6 11.3,12.4"
+                       stroke="currentColor" stroke-width="0.9" fill="currentColor" fill-opacity="0.08"/>
+              <circle cx="16" cy="16" r="3.6"  stroke="currentColor" stroke-width="1"   fill="currentColor" fill-opacity="0.2"/>
+              <circle cx="16" cy="16" r="1.8"  fill="currentColor"/>
             </svg>
           </div>
         </div>
@@ -63,7 +53,7 @@
           <span class="hdr-date" id="live-date">07 MAI. 2026</span>
           <span class="hdr-time" id="live-time">00:00:00</span>
         </div>
-        <button class="hdr-icon-btn" title="Notificacoes">
+        <button class="hdr-icon-btn" id="btn-notification" title="Notificacoes">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
         </button>
         <button class="hdr-icon-btn" title="Reiniciar conversa" id="btn-clear-chat">
@@ -93,10 +83,11 @@
         <div class="nav-footer">
           <div class="nav-avatar">
             <svg viewBox="0 0 32 32" fill="none" width="14" height="14">
-              <path d="M16,1 L29,7.5 L29.5,21 L22,30 L10,30 L2.5,21 L3,7.5 Z" stroke="currentColor" stroke-width="1.2" fill="none" opacity="0.9"/>
-              <path d="M6.5,16.5 L7,13.5 L14.8,12 L15.2,15 Z" fill="currentColor"/>
-              <path d="M16.8,15 L17.2,12 L25,13.5 L25.5,16.5 Z" fill="currentColor"/>
-              <circle cx="16" cy="21.5" r="1.5" fill="currentColor"/>
+              <circle cx="16" cy="16" r="11.5" stroke="currentColor" stroke-width="1.4" opacity="0.85"/>
+              <circle cx="16" cy="16" r="7"    stroke="currentColor" stroke-width="1"   opacity="0.65"/>
+              <polygon points="16,10.5 20,12.75 20,19.25 16,21.5 12,19.25 12,12.75"
+                       stroke="currentColor" stroke-width="0.9" fill="currentColor" fill-opacity="0.1"/>
+              <circle cx="16" cy="16" r="2" fill="currentColor"/>
             </svg>
           </div>
           <div class="nav-footer-info">
@@ -120,7 +111,7 @@
           <div class="welcome-screen" id="welcome-screen">
 
             <div class="sphere-wrap" aria-hidden="true">
-              <canvas id="neural-sphere"></canvas>
+<canvas id="neural-sphere"></canvas>
               <div class="sphere-glow"></div>
               <div class="sphere-scan"></div>
               <div class="sphere-label">
@@ -180,6 +171,12 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.06-4.43"/></svg>
               ATUALIZAR
             </button>
+          </div>
+          <div class="ap-filter-bar">
+            <button class="ap-filter-btn active" data-filter="all">TODOS</button>
+            <button class="ap-filter-btn af-overdue" data-filter="overdue">ATRASADAS</button>
+            <button class="ap-filter-btn af-pending" data-filter="pending">AGUARDANDO</button>
+            <button class="ap-filter-btn af-ok" data-filter="ok">OK</button>
           </div>
           <div class="ap-grid" id="ap-grid">
             <div class="ap-loading">CARREGANDO AUTOMAÇÕES...</div>

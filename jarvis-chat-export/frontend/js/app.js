@@ -1,15 +1,22 @@
 /* ════════════════════════════════════════════════
-   J.A.R.V.I.S — Neural Core v4.0 · app.js
+   J.A.R.V.I.S — Neural Core v5.0 · app.js
    ════════════════════════════════════════════════ */
 
 const API_BASE    = window.location.origin;
 const MAX_HISTORY = 20;
+const CHAT_STORAGE_KEY = "jarvis_chat_v1";
+const CHAT_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
 const state = {
   history: [],
   isLoading: false,
   messageCount: 0,
   sessionStart: Date.now(),
   latencyHistory: [],
+  savedMessages: [],       // { role, text, time } — para restaurar sessão
+  prevOverdueCount: -1,    // para detectar novas ocorrências de overdue
+  notifEnabled: false,
+  currentFilter: "all",
 };
 
 const DOM = {
@@ -28,6 +35,7 @@ const DOM = {
   msgCounter:        () => document.getElementById("msg-counter"),
   btnClearChat:      () => document.getElementById("btn-clear-chat"),
   btnMenuToggle:     () => document.getElementById("btn-menu-toggle"),
+  btnNotification:   () => document.getElementById("btn-notification"),
   leftSidebar:       () => document.getElementById("left-sidebar"),
   toastContainer:    () => document.getElementById("toast-container"),
   liveTime:          () => document.getElementById("live-time"),
@@ -46,10 +54,13 @@ const DOM = {
   rsIngestFill:      () => document.getElementById("rs-ingest-fill"),
   rsSessionStart:    () => document.getElementById("rs-session-start"),
   rsSparkline:       () => document.getElementById("rs-sparkline"),
+  quickSuggestions:  () => document.getElementById("quick-suggestions"),
+  apGrid:            () => document.getElementById("ap-grid"),
 };
 
 function setText(el, value) { if (el) el.textContent = value; }
 
+/* ─── Formatadores ───────────────────────────── */
 function formatSourceName(source) {
   switch (source) {
     case "sqlite-ingest": return "SQLITE";
@@ -83,7 +94,32 @@ function formatUptime(ms) {
   return `${h}:${m}:${sec}`;
 }
 
-/* ─── System status refresh ─────────────────── */
+/* ─── Chat persistence ────────────────────────── */
+function saveChatToStorage() {
+  try {
+    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify({
+      messages: state.savedMessages,
+      history:  state.history,
+      savedAt:  Date.now(),
+    }));
+  } catch (_) {}
+}
+
+function loadChatFromStorage() {
+  try {
+    const raw = localStorage.getItem(CHAT_STORAGE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data || Date.now() - data.savedAt > CHAT_TTL_MS) return null;
+    return data;
+  } catch (_) { return null; }
+}
+
+function clearChatStorage() {
+  try { localStorage.removeItem(CHAT_STORAGE_KEY); } catch (_) {}
+}
+
+/* ─── System status ───────────────────────────── */
 async function refreshSystemStatus() {
   const [healthResult, infoResult, debugResult] = await Promise.allSettled([
     fetch(`${API_BASE}/api/health`),
@@ -92,7 +128,6 @@ async function refreshSystemStatus() {
   ]);
 
   let health = null, info = null, debug = null;
-
   if (healthResult.status === "fulfilled" && healthResult.value.ok)
     health = await healthResult.value.json();
   if (infoResult.status === "fulfilled" && infoResult.value.ok)
@@ -107,7 +142,6 @@ async function refreshSystemStatus() {
   const lastEvent    = formatDateTime(debug?.ingest?.lastEventAt);
   const providerName = health?.groq ? "GROQ" : health?.provider?.toUpperCase?.() ?? "GROQ";
 
-  /* Header */
   const statusEl = DOM.hdrSystemStatus();
   if (statusEl) {
     const dot = statusEl.querySelector(".metric-dot");
@@ -118,37 +152,31 @@ async function refreshSystemStatus() {
   }
   setText(DOM.hdrProvider(), providerName);
 
-  /* Right sidebar — core */
   const dot = DOM.rsStatusDot();
   if (dot) {
-    dot.style.background  = healthy ? "var(--success)" : "var(--danger)";
-    dot.style.boxShadow   = healthy ? "0 0 8px var(--success)" : "0 0 8px var(--danger)";
+    dot.style.background = healthy ? "var(--success)" : "var(--danger)";
+    dot.style.boxShadow  = healthy ? "0 0 8px var(--success)" : "0 0 8px var(--danger)";
   }
   const coreText = DOM.rsStatusText();
   if (coreText) {
-    coreText.textContent  = healthy ? "OPERACIONAL" : "DEGRADADO";
-    coreText.style.color  = healthy ? "var(--success)" : "var(--danger)";
+    coreText.textContent = healthy ? "OPERACIONAL" : "DEGRADADO";
+    coreText.style.color = healthy ? "var(--success)" : "var(--danger)";
   }
 
-  /* Right sidebar — ingest */
   setText(DOM.rsSource(),    sourceLabel);
   setText(DOM.rsMode(),      modeLabel);
   setText(DOM.rsEvents(),    String(totalEvents));
   setText(DOM.rsLastEvent(), lastEvent);
 
   const fillEl = DOM.rsIngestFill();
-  if (fillEl) {
-    const pct = Math.min((totalEvents / 200) * 100, 100);
-    fillEl.style.width = pct + "%";
-  }
+  if (fillEl) fillEl.style.width = Math.min((totalEvents / 200) * 100, 100) + "%";
 
-  /* Sparkline */
   state.latencyHistory.push(totalEvents);
   if (state.latencyHistory.length > 20) state.latencyHistory.shift();
   drawSparkline();
 }
 
-/* ─── Sparkline ─────────────────────────────── */
+/* ─── Sparkline ──────────────────────────────── */
 function drawSparkline() {
   const canvas = DOM.rsSparkline();
   if (!canvas) return;
@@ -158,12 +186,8 @@ function drawSparkline() {
   if (data.length < 2) return;
 
   ctx.clearRect(0, 0, w, h);
-
   const max = Math.max(...data, 1);
-  const pts = data.map((v, i) => ({
-    x: (i / (data.length - 1)) * w,
-    y: h - 4 - (v / max) * (h - 8),
-  }));
+  const pts = data.map((v, i) => ({ x: (i / (data.length - 1)) * w, y: h - 4 - (v / max) * (h - 8) }));
 
   const grad = ctx.createLinearGradient(0, 0, 0, h);
   grad.addColorStop(0, "rgba(0,217,255,0.18)");
@@ -186,6 +210,68 @@ function drawSparkline() {
   ctx.strokeStyle = "rgba(0,217,255,0.6)";
   ctx.lineWidth = 1.5;
   ctx.stroke();
+}
+
+/* ─── Notifications ──────────────────────────── */
+async function requestNotificationPermission() {
+  if (!("Notification" in window)) return false;
+  if (Notification.permission === "granted") return true;
+  if (Notification.permission === "denied") return false;
+  const result = await Notification.requestPermission();
+  return result === "granted";
+}
+
+function showOverdueNotification(automations) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  if (document.hasFocus()) return;
+  const overdue = automations.filter(a => a.status === "overdue");
+  if (!overdue.length) return;
+  const names = overdue.map(a => a.displayName).join(", ");
+  try {
+    new Notification("JARVIS — Automação Atrasada", {
+      body: names,
+      icon: "/favicon.svg",
+      tag: "jarvis-overdue",
+      silent: false,
+    });
+  } catch (_) {}
+}
+
+function updateNotificationButton(overdueCount) {
+  const btn = DOM.btnNotification();
+  if (!btn) return;
+  btn.classList.toggle("notif-active", overdueCount > 0);
+  btn.title = overdueCount > 0
+    ? `${overdueCount} automação${overdueCount > 1 ? "ões" : ""} atrasada${overdueCount > 1 ? "s" : ""} — clique para ativar notificações`
+    : "Notificações";
+}
+
+/* ─── Contextual suggestions ─────────────────── */
+function updateContextualSuggestions(automations) {
+  const suggestions = DOM.quickSuggestions();
+  if (!suggestions) return;
+
+  // Remove card de alerta anterior
+  suggestions.querySelector(".qcard--alert")?.remove();
+
+  const overdue = automations.filter(a => a.status === "overdue");
+  if (!overdue.length) return;
+
+  const names = overdue.map(a => a.displayName);
+  const query = `O que aconteceu com ${names.join(" e ")}? Mostre o status atual, últimos logs e possíveis causas de atraso.`;
+
+  const card = document.createElement("button");
+  card.className = "qcard qcard--alert";
+  card.dataset.msg = query;
+  card.style.cssText = "border-color: rgba(255,61,110,0.4); background: rgba(255,61,110,0.06);";
+  card.innerHTML = `
+    <span class="qcard-icon" style="color:var(--danger)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    </span>
+    <span class="qcard-title" style="color:var(--danger)">ATENÇÃO</span>
+    <span class="qcard-desc">${names.join(", ")} ${names.length > 1 ? "estão atrasadas" : "está atrasada"}</span>
+    <span class="qcard-arrow" style="color:var(--danger)">→</span>`;
+  suggestions.prepend(card);
 }
 
 /* ─── Monitor ────────────────────────────────── */
@@ -245,6 +331,18 @@ async function refreshMonitor() {
       banner.hidden = overdueCount === 0;
       bannerTx.textContent = `${overdueCount} AUTOMAÇÃO${overdueCount > 1 ? "ÕES" : ""} ATRASADA${overdueCount > 1 ? "S" : ""}`;
     }
+
+    updateNotificationButton(overdueCount);
+
+    // Notificação quando novos overdues aparecem
+    if (state.prevOverdueCount !== -1 && overdueCount > state.prevOverdueCount) {
+      showOverdueNotification(data.automations);
+    }
+    state.prevOverdueCount = overdueCount;
+
+    // Sugestões contextuais na tela de boas-vindas
+    if (DOM.welcomeScreen()) updateContextualSuggestions(data.automations);
+
   } catch (_) {}
 }
 
@@ -264,14 +362,14 @@ function setLoading(on) {
   input.disabled = on;
   if (on) {
     btn.disabled = true;
-    if (DOM.sendIcon())        DOM.sendIcon().hidden        = true;
-    if (DOM.loadingIcon())     DOM.loadingIcon().hidden     = false;
-    if (DOM.typingIndicator()) DOM.typingIndicator().hidden = false;
+    DOM.sendIcon()?.setAttribute("hidden", "");
+    DOM.loadingIcon()?.removeAttribute("hidden");
+    DOM.typingIndicator()?.removeAttribute("hidden");
   } else {
     btn.disabled = input.value.trim().length === 0;
-    if (DOM.sendIcon())        DOM.sendIcon().hidden        = false;
-    if (DOM.loadingIcon())     DOM.loadingIcon().hidden     = true;
-    if (DOM.typingIndicator()) DOM.typingIndicator().hidden = true;
+    DOM.sendIcon()?.removeAttribute("hidden");
+    DOM.loadingIcon()?.setAttribute("hidden", "");
+    DOM.typingIndicator()?.setAttribute("hidden", "");
     input.focus();
   }
 }
@@ -304,22 +402,73 @@ function parseMarkdown(text) {
     .replace(/\n/g,"<br>");
 }
 
+/* ─── Copy text util ─────────────────────────── */
+async function copyText(text) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      // fallback para HTTP localhost
+      const ta = document.createElement("textarea");
+      ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    showToast("Copiado!", "success");
+  } catch (_) {
+    showToast("Falha ao copiar.", "error");
+  }
+}
+
 /* ─── Render message ─────────────────────────── */
-function renderMessage(role, text) {
+function renderMessage(role, text, time) {
   const area = DOM.messagesArea();
   const ws   = DOM.welcomeScreen();
   if (ws) ws.remove();
-  const time = new Date().toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" });
+
+  const t = time || new Date().toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" });
   const wrap = document.createElement("div");
   wrap.className = `message-wrapper ${role}`;
-  wrap.innerHTML = `
-    <div class="message-avatar">${role === "user" ? "EU" : "J"}</div>
-    <div class="message-content">
-      <div class="message-bubble">${parseMarkdown(text)}</div>
-      <div class="message-meta">${time}</div>
-    </div>`;
+
+  const contentDiv = document.createElement("div");
+  contentDiv.className = "message-content";
+
+  const bubble = document.createElement("div");
+  bubble.className = "message-bubble";
+  bubble.innerHTML = parseMarkdown(text);
+
+  const meta = document.createElement("div");
+  meta.className = "message-meta";
+  meta.textContent = t;
+
+  contentDiv.appendChild(bubble);
+  contentDiv.appendChild(meta);
+
+  if (role === "assistant") {
+    const copyBtn = document.createElement("button");
+    copyBtn.className = "msg-copy-btn";
+    copyBtn.title = "Copiar resposta";
+    copyBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
+    copyBtn.addEventListener("click", () => copyText(text));
+    contentDiv.appendChild(copyBtn);
+  }
+
+  const avatar = document.createElement("div");
+  avatar.className = "message-avatar";
+  avatar.textContent = role === "user" ? "EU" : "J";
+
+  if (role === "user") {
+    wrap.appendChild(contentDiv);
+    wrap.appendChild(avatar);
+  } else {
+    wrap.appendChild(avatar);
+    wrap.appendChild(contentDiv);
+  }
+
   area.appendChild(wrap);
   area.scrollTo({ top: area.scrollHeight, behavior: "smooth" });
+  return t;
 }
 
 /* ─── Send ───────────────────────────────────── */
@@ -329,10 +478,10 @@ async function sendMessage() {
   if (!msg || state.isLoading) return;
 
   state.messageCount++;
-  renderMessage("user", msg);
+  const time = renderMessage("user", msg);
+  state.savedMessages.push({ role: "user", text: msg, time });
   input.value = ""; input.style.height = "auto";
   updateCharCounter(0); setLoading(true);
-
   setText(DOM.msgCounter(), state.messageCount);
 
   try {
@@ -344,8 +493,15 @@ async function sendMessage() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Erro na API");
 
-    renderMessage("assistant", data.text);
+    const assistTime = renderMessage("assistant", data.text);
+    state.savedMessages.push({ role: "assistant", text: data.text, time: assistTime });
     state.history.push({ role:"user", content:msg }, { role:"assistant", content:data.text });
+
+    // Mantém só os últimos MAX_HISTORY * 2 mensagens salvas
+    if (state.savedMessages.length > MAX_HISTORY * 2) {
+      state.savedMessages = state.savedMessages.slice(-MAX_HISTORY * 2);
+    }
+    saveChatToStorage();
 
     const lat = data.latencyMs ? `${data.latencyMs}ms` : `${Math.round(performance.now() - t0)}ms`;
     setText(DOM.hdrLatency(), lat);
@@ -383,13 +539,11 @@ function initParticles() {
 
 /* ═══════════════════════════════════════════════
    ADVANCED 3D HOLOGRAPHIC SPHERE
-   Multi-layer: atmosphere · grid · lattice · cells · orbits · waves · core
    ═══════════════════════════════════════════════ */
 function initAdvancedSphere() {
   const canvas = document.getElementById("neural-sphere");
   if (!canvas) return;
 
-  /* ─ Sizing: wait for layout if needed ─ */
   const raw = canvas.offsetWidth;
   if (!raw) { requestAnimationFrame(initAdvancedSphere); return; }
 
@@ -397,16 +551,14 @@ function initAdvancedSphere() {
   const SIZE = raw;
   canvas.width  = SIZE * dpr;
   canvas.height = SIZE * dpr;
-  /* leave canvas.style.width/height to CSS (inset:0 fills parent) */
 
   const ctx = canvas.getContext("2d");
   ctx.scale(dpr, dpr);
 
   const CX = SIZE / 2, CY = SIZE / 2;
   const R  = SIZE * 0.365;
-  const CONN = SIZE * 0.075; /* connection distance threshold */
+  const CONN = SIZE * 0.075;
 
-  /* ─ 3D projection ─ */
   function proj3(phi, theta, rotY, rotZ) {
     const x0 = R * Math.sin(phi) * Math.cos(theta);
     const y0 = R * Math.cos(phi);
@@ -418,7 +570,6 @@ function initAdvancedSphere() {
     return { px: CX + x2, py: CY + y2, z: z1 };
   }
 
-  /* ─ Fibonacci lattice (mais pontos) ─ */
   const N = 280;
   const dots = Array.from({ length: N }, (_, i) => ({
     phi:   Math.acos(1 - 2 * (i + 0.5) / N),
@@ -426,7 +577,6 @@ function initAdvancedSphere() {
     sz:    0.35 + Math.random() * 0.9,
   }));
 
-  /* ─ Organic cells (mais células, mais rápidas) ─ */
   const CELLS = Array.from({ length: 9 }, () => ({
     phi:   Math.random() * Math.PI,
     theta: Math.random() * Math.PI * 2,
@@ -438,7 +588,6 @@ function initAdvancedSphere() {
     sides: 5 + Math.floor(Math.random() * 3),
   }));
 
-  /* ─ Orbiting particles (mais anéis, mais rápidos) ─ */
   const ORBITS = [
     { n: 10, r: R * 0.93, spd:  0.50, tilt:  0.62, off: 0,               col: [0, 217, 255] },
     { n: 7,  r: R * 1.06, spd: -0.32, tilt: -0.80, off: Math.PI / 3,     col: [0, 110, 255] },
@@ -446,13 +595,9 @@ function initAdvancedSphere() {
     { n: 5,  r: R * 1.12, spd: -0.14, tilt:  0.38, off: Math.PI * 0.75,  col: [100, 200, 255] },
   ];
 
-  /* ─ Energy waves (4 ondas) ─ */
   const WAVES = [0, 0.5, 1.0, 1.5].map((o, i) => ({ phase: o * Math.PI * 2, spd: 0.7 + i * 0.18 }));
-
-  /* ─ Pre-projected buffer (reuse each frame) ─ */
   const pbuf = new Array(N);
 
-  /* ─ Hot nodes: nós que pulsam com cor diferente ─ */
   const HOT = new Set();
   const hotTimer = setInterval(() => {
     if (HOT.size < 7) HOT.add(Math.floor(Math.random() * N));
@@ -461,7 +606,6 @@ function initAdvancedSphere() {
     }
   }, 700);
 
-  /* ─ Data streams: partículas viajando entre nós ─ */
   const STRM = [];
   const strmTimer = setInterval(() => {
     if (STRM.length < 8) STRM.push({
@@ -483,15 +627,13 @@ function initAdvancedSphere() {
 
       ctx.clearRect(0, 0, SIZE, SIZE);
 
-      /* === Atmosphere === */
       const atm = ctx.createRadialGradient(CX, CY, R * 0.6, CX, CY, R * 1.2);
-      atm.addColorStop(0,   "rgba(0,80,200,0.00)");
+      atm.addColorStop(0, "rgba(0,80,200,0.00)");
       atm.addColorStop(0.5, "rgba(0,80,200,0.05)");
-      atm.addColorStop(1,   "rgba(0,217,255,0.00)");
+      atm.addColorStop(1, "rgba(0,217,255,0.00)");
       ctx.fillStyle = atm;
       ctx.beginPath(); ctx.arc(CX, CY, R * 1.2, 0, Math.PI * 2); ctx.fill();
 
-      /* === Holographic grid (aprimorado) === */
       ctx.save();
       ctx.globalAlpha = 0.16 + 0.05 * Math.sin(t * 0.8);
       ctx.strokeStyle = "rgba(0,217,255,0.9)";
@@ -500,10 +642,7 @@ function initAdvancedSphere() {
         const pLat = (lat / 8) * Math.PI;
         const rr  = R * Math.sin(pLat);
         const yy  = CY - R * Math.cos(pLat) * Math.cos(rotZ * 0.5);
-        /* equador ligeiramente mais brilhante */
-        ctx.globalAlpha = lat === 4
-          ? 0.32 + 0.10 * Math.sin(t * 0.8)
-          : 0.14 + 0.05 * Math.sin(t * 0.8);
+        ctx.globalAlpha = lat === 4 ? 0.32 + 0.10 * Math.sin(t * 0.8) : 0.14 + 0.05 * Math.sin(t * 0.8);
         ctx.lineWidth = lat === 4 ? 0.8 : 0.45;
         ctx.beginPath();
         ctx.ellipse(CX, yy, rr * (0.88 + 0.12 * Math.abs(Math.cos(rotY))), rr * 0.27, 0, 0, Math.PI * 2);
@@ -526,21 +665,17 @@ function initAdvancedSphere() {
       }
       ctx.restore();
 
-      /* === Banda equatorial === */
       ctx.save();
       const eqA = 0.42 + 0.14 * Math.sin(t * 0.55);
       ctx.strokeStyle = `rgba(0,217,255,${eqA})`;
       ctx.lineWidth = 2;
-      ctx.shadowColor = 'rgba(0,217,255,0.7)';
+      ctx.shadowColor = "rgba(0,217,255,0.7)";
       ctx.shadowBlur  = 10;
       ctx.beginPath();
-      ctx.ellipse(CX, CY - R * 0.02 * Math.sin(rotZ),
-        R, R * 0.20 + R * 0.04 * Math.abs(Math.cos(rotY)),
-        rotZ * 0.35, 0, Math.PI * 2);
+      ctx.ellipse(CX, CY - R * 0.02 * Math.sin(rotZ), R, R * 0.20 + R * 0.04 * Math.abs(Math.cos(rotY)), rotZ * 0.35, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
 
-      /* === Radar sweep === */
       ctx.save();
       ctx.beginPath(); ctx.arc(CX, CY, R, 0, Math.PI * 2); ctx.clip();
       const sa = (t * 0.38) % (Math.PI * 2);
@@ -562,7 +697,6 @@ function initAdvancedSphere() {
       ctx.lineWidth = 0.9; ctx.stroke();
       ctx.restore();
 
-      /* === Lattice: project all dots === */
       for (let i = 0; i < N; i++) {
         const d = dots[i];
         pbuf[i] = proj3(d.phi, d.theta + rotY * 0.42, rotY * 0.42, rotZ);
@@ -570,11 +704,9 @@ function initAdvancedSphere() {
         pbuf[i].idx = i;
       }
       pbuf.sort((a, b) => a.z - b.z);
-      /* lookup por índice original (usado por streams) */
       const pmap = new Map();
       for (const p of pbuf) pmap.set(p.idx, p);
 
-      /* Connections — stride aumentado para mais linhas visíveis */
       ctx.lineWidth = 0.5;
       const CONN2 = CONN * CONN;
       for (let i = 0; i < N; i++) {
@@ -595,7 +727,6 @@ function initAdvancedSphere() {
         }
       }
 
-      /* Dots */
       for (let i = 0; i < N; i++) {
         const p = pbuf[i];
         const depth = (p.z + R) / (2 * R);
@@ -607,7 +738,6 @@ function initAdvancedSphere() {
         ctx.fill();
       }
 
-      /* === Polos iluminados === */
       for (const polePhi of [0.06, Math.PI - 0.06]) {
         const pp = proj3(polePhi, 0, rotY, rotZ);
         if (pp.z < 0) continue;
@@ -615,12 +745,11 @@ function initAdvancedSphere() {
         const pg = ctx.createRadialGradient(pp.px, pp.py, 0, pp.px, pp.py, R * 0.14 * depth);
         pg.addColorStop(0,   `rgba(200,255,255,${0.70 * depth})`);
         pg.addColorStop(0.4, `rgba(0,217,255,${0.25 * depth})`);
-        pg.addColorStop(1,   'rgba(0,100,255,0)');
+        pg.addColorStop(1,   "rgba(0,100,255,0)");
         ctx.beginPath(); ctx.arc(pp.px, pp.py, R * 0.14 * depth, 0, Math.PI * 2);
         ctx.fillStyle = pg; ctx.fill();
       }
 
-      /* === Hot nodes === */
       for (const p of pbuf) {
         if (!HOT.has(p.idx)) continue;
         const depth = (p.z + R) / (2 * R);
@@ -630,7 +759,7 @@ function initAdvancedSphere() {
         const hg = ctx.createRadialGradient(p.px, p.py, 0, p.px, p.py, nr * 3.5);
         hg.addColorStop(0,   `rgba(0,255,180,${0.95 * depth})`);
         hg.addColorStop(0.4, `rgba(0,210,255,${0.5 * depth})`);
-        hg.addColorStop(1,   'rgba(0,100,255,0)');
+        hg.addColorStop(1,   "rgba(0,100,255,0)");
         ctx.beginPath(); ctx.arc(p.px, p.py, nr, 0, Math.PI * 2);
         ctx.fillStyle = hg; ctx.fill();
         ctx.beginPath(); ctx.arc(p.px, p.py, nr * 2.8, 0, Math.PI * 2);
@@ -638,7 +767,6 @@ function initAdvancedSphere() {
         ctx.lineWidth = 0.6; ctx.stroke();
       }
 
-      /* === Organic cells === */
       for (const cell of CELLS) {
         cell.phi   += cell.dPhi;
         cell.theta += cell.dTh;
@@ -669,7 +797,6 @@ function initAdvancedSphere() {
         ctx.restore();
       }
 
-      /* === Orbiting particles === */
       for (const orb of ORBITS) {
         const base = t * orb.spd + orb.off;
         for (let i = 0; i < orb.n; i++) {
@@ -699,7 +826,6 @@ function initAdvancedSphere() {
         }
       }
 
-      /* === Energy waves === */
       for (const w of WAVES) {
         const progress = ((t * w.spd + w.phase) % (Math.PI * 2)) / (Math.PI * 2);
         const wAlpha   = (1 - progress) * 0.15;
@@ -709,7 +835,6 @@ function initAdvancedSphere() {
         ctx.lineWidth = 1.6 * (1 - progress); ctx.stroke();
       }
 
-      /* === Data streams === */
       for (let i = STRM.length - 1; i >= 0; i--) {
         const s = STRM[i];
         if (s.born === null) s.born = t;
@@ -720,35 +845,31 @@ function initAdvancedSphere() {
         const x = ps.px + (pd.px - ps.px) * prog;
         const y = ps.py + (pd.py - ps.py) * prog;
         const depth = ((ps.z + pd.z) / 2 + R) / (2 * R);
-        /* head glow */
         const sg = ctx.createRadialGradient(x, y, 0, x, y, 5 * depth);
         sg.addColorStop(0,   `rgba(120,255,220,${0.92 * depth})`);
         sg.addColorStop(0.5, `rgba(0,217,255,${0.45 * depth})`);
-        sg.addColorStop(1,   'rgba(0,100,255,0)');
+        sg.addColorStop(1,   "rgba(0,100,255,0)");
         ctx.beginPath(); ctx.arc(x, y, 3.5 * depth, 0, Math.PI * 2);
         ctx.fillStyle = sg; ctx.fill();
-        /* trail */
         const trailProg = Math.max(0, prog - 0.18);
-        const tx = ps.px + (pd.px - ps.px) * trailProg;
-        const ty = ps.py + (pd.py - ps.py) * trailProg;
-        ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(x, y);
+        const tx2 = ps.px + (pd.px - ps.px) * trailProg;
+        const ty2 = ps.py + (pd.py - ps.py) * trailProg;
+        ctx.beginPath(); ctx.moveTo(tx2, ty2); ctx.lineTo(x, y);
         ctx.strokeStyle = `rgba(0,255,200,${0.38 * depth * (1 - prog)})`;
         ctx.lineWidth = 1.4; ctx.stroke();
       }
 
-      /* === Limb brightening === */
       ctx.save();
       const limbG = ctx.createRadialGradient(CX, CY, R * 0.78, CX, CY, R * 1.04);
-      limbG.addColorStop(0,    'rgba(0,217,255,0)');
+      limbG.addColorStop(0,    "rgba(0,217,255,0)");
       limbG.addColorStop(0.70, `rgba(0,180,255,${0.04 + 0.03 * Math.sin(t * 0.7)})`);
       limbG.addColorStop(0.87, `rgba(0,217,255,${0.22 + 0.08 * Math.sin(t * 0.7)})`);
       limbG.addColorStop(0.95, `rgba(80,235,255,${0.12 + 0.06 * Math.sin(t * 0.7)})`);
-      limbG.addColorStop(1,    'rgba(0,217,255,0)');
+      limbG.addColorStop(1,    "rgba(0,217,255,0)");
       ctx.beginPath(); ctx.arc(CX, CY, R * 1.04, 0, Math.PI * 2);
       ctx.fillStyle = limbG; ctx.fill();
       ctx.restore();
 
-      /* === Core glow + scan === */
       const coreP = 0.5 + 0.5 * Math.sin(t * 1.15);
       const cg2 = ctx.createRadialGradient(CX, CY, 0, CX, CY, R * 0.5);
       cg2.addColorStop(0,    `rgba(0,180,255,${0.25 + 0.11 * coreP})`);
@@ -756,7 +877,6 @@ function initAdvancedSphere() {
       cg2.addColorStop(1,    "rgba(0,0,0,0)");
       ctx.fillStyle = cg2; ctx.fillRect(0, 0, SIZE, SIZE);
 
-      /* scan duplo: dois feixes cruzados */
       for (const [phase, bright] of [[0, 1], [Math.PI, 0.55]]) {
         const scanY = CY + R * 0.72 * Math.sin(t * 0.28 + phase);
         const sg = ctx.createLinearGradient(CX - R, scanY, CX + R, scanY);
@@ -768,9 +888,7 @@ function initAdvancedSphere() {
         ctx.fillStyle = sg;
         ctx.fillRect(CX - R, scanY - 2, R * 2, 4);
       }
-
-    } catch (_) { /* never let an exception kill the loop */ }
-
+    } catch (_) {}
     rafId = requestAnimationFrame(draw);
   }
 
@@ -788,6 +906,36 @@ function formatMonitorTimeFull(iso) {
   return d.toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" });
 }
 
+function applyFilter(filter) {
+  state.currentFilter = filter;
+  document.querySelectorAll(".ap-filter-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.filter === filter);
+  });
+  document.querySelectorAll(".ap-card").forEach(card => {
+    const status = card.dataset.status;
+    card.style.display = (filter === "all" || status === filter) ? "" : "none";
+  });
+}
+
+function buildRunDots(history) {
+  if (!history || !history.length) return "";
+  const dots = history.map(r => {
+    const cls = r.hasError ? "error" : (r.status === "ok" || r.status === "SUCESSO") ? "ok" : "unknown";
+    const dt = r.timestamp ? new Date(r.timestamp).toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" }) : "";
+    return `<span class="ap-run-dot ${cls}" title="${dt}"></span>`;
+  }).reverse().join("");
+  return `<div class="ap-run-history"><span class="ap-run-history-label">HISTÓRICO</span>${dots}</div>`;
+}
+
+async function loadAutomationHistory(name) {
+  try {
+    const res = await fetch(`${API_BASE}/api/monitor/history/${encodeURIComponent(name)}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.history || [];
+  } catch (_) { return []; }
+}
+
 async function renderAutomationsPanel() {
   const grid = document.getElementById("ap-grid");
   if (!grid) return;
@@ -802,6 +950,14 @@ async function renderAutomationsPanel() {
       return;
     }
 
+    // Carrega histórico de todas as automações conectadas
+    const historyMap = {};
+    for (const a of data.automations) {
+      if (a.connected) {
+        historyMap[a.name] = await loadAutomationHistory(a.name);
+      }
+    }
+
     grid.innerHTML = data.automations.map(a => {
       const connected = a.connected;
       const statusClass = a.status || "not_connected";
@@ -809,8 +965,9 @@ async function renderAutomationsPanel() {
       const lastTime    = formatMonitorTimeFull(a.lastEventAt);
       const elapsed     = a.hoursElapsed != null ? `${a.hoursElapsed}h atrás` : "—";
       const askDisabled = connected ? "" : "disabled";
+      const historyHtml = buildRunDots(historyMap[a.name]);
 
-      return `<div class="ap-card ${statusClass === "overdue" ? "ap-card--overdue" : ""}">
+      return `<div class="ap-card ${statusClass === "overdue" ? "ap-card--overdue" : ""}" data-status="${statusClass}">
         <div class="ap-card-head">
           <span class="ap-dot ${statusClass}"></span>
           <span class="ap-card-name">${a.displayName}</span>
@@ -830,6 +987,7 @@ async function renderAutomationsPanel() {
             <span class="ap-row-val ${connected ? "" : "dim"}">${connected ? "ATIVA" : "DESCONECTADA"}</span>
           </div>
         </div>
+        ${historyHtml}
         <button class="ap-ask-btn" data-name="${a.displayName}" ${askDisabled}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           DIAGNOSTICAR
@@ -837,7 +995,6 @@ async function renderAutomationsPanel() {
       </div>`;
     }).join("");
 
-    /* ask buttons → go to chat */
     grid.querySelectorAll(".ap-ask-btn:not([disabled])").forEach(btn => {
       btn.addEventListener("click", () => {
         const name = btn.getAttribute("data-name");
@@ -850,6 +1007,10 @@ async function renderAutomationsPanel() {
         }
       });
     });
+
+    // Reaplica filtro atual
+    if (state.currentFilter !== "all") applyFilter(state.currentFilter);
+
   } catch (err) {
     grid.innerHTML = `<div class="ap-loading">ERRO: ${err.message}</div>`;
   }
@@ -887,12 +1048,26 @@ function init() {
   updateClock();
   setInterval(updateClock, 1000);
 
+  // Restaura conversa salva
+  const saved = loadChatFromStorage();
+  if (saved?.messages?.length) {
+    state.history = saved.history || [];
+    state.savedMessages = saved.messages;
+    for (const m of saved.messages) {
+      renderMessage(m.role, m.text, m.time);
+    }
+    state.messageCount = saved.messages.filter(m => m.role === "user").length;
+    setText(DOM.msgCounter(), state.messageCount);
+  }
+
   refreshSystemStatus().catch(() => showToast("Não foi possível carregar o status operacional.", "error"));
   refreshMonitor().catch(() => {});
+
+  // Polling a cada 30s (monitor tem cache de 30s no servidor)
   setInterval(() => {
     refreshSystemStatus().catch(() => {});
     refreshMonitor().catch(() => {});
-  }, 60_000);
+  }, 30_000);
 
   initParticles();
   initAdvancedSphere();
@@ -919,9 +1094,23 @@ function init() {
     }
   });
 
-  DOM.btnClearChat()?.addEventListener("click", () => location.reload());
+  DOM.btnClearChat()?.addEventListener("click", () => {
+    clearChatStorage();
+    location.reload();
+  });
 
-  /* Sidebar drawer toggle (mobile) */
+  // Botão de notificação: pede permissão e ativa
+  DOM.btnNotification()?.addEventListener("click", async () => {
+    const granted = await requestNotificationPermission();
+    if (granted) {
+      state.notifEnabled = true;
+      showToast("Notificações ativadas!", "success");
+    } else {
+      showToast("Notificações bloqueadas no navegador.", "error");
+    }
+  });
+
+  // Sidebar drawer (mobile)
   DOM.btnMenuToggle()?.addEventListener("click", () => DOM.leftSidebar()?.classList.toggle("open"));
   document.addEventListener("click", e => {
     const sb = DOM.leftSidebar(), tb = DOM.btnMenuToggle();
@@ -929,15 +1118,19 @@ function init() {
       sb.classList.remove("open");
   });
 
-  /* Nav: sidebar (desktop) + mobile bottom bar */
+  // Nav: sidebar + mobile
   document.getElementById("nav-jarvis")?.addEventListener("click", showChat);
   document.getElementById("nav-automacoes")?.addEventListener("click", showAutomations);
   document.getElementById("mob-nav-jarvis")?.addEventListener("click", showChat);
   document.getElementById("mob-nav-automacoes")?.addEventListener("click", showAutomations);
 
-  /* Voltar ao chat */
   document.getElementById("ap-back-btn")?.addEventListener("click", showChat);
   document.getElementById("ap-refresh-btn")?.addEventListener("click", renderAutomationsPanel);
+
+  // Filtros do painel de automações
+  document.querySelectorAll(".ap-filter-btn").forEach(btn => {
+    btn.addEventListener("click", () => applyFilter(btn.dataset.filter));
+  });
 
   input.focus();
 }

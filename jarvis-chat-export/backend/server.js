@@ -14,6 +14,31 @@ const logIngestStore = require("./log-ingest-store");
 const { getMonitorStatus } = require("./monitor");
 
 const app = express();
+
+// Cache do monitor: recalcula no máximo a cada 30s
+let _monitorCache = null;
+let _monitorCacheAt = 0;
+const MONITOR_CACHE_TTL = 30_000;
+
+async function getCachedMonitorStatus(force = false) {
+  const now = Date.now();
+  if (!force && _monitorCache && now - _monitorCacheAt < MONITOR_CACHE_TTL) {
+    return _monitorCache;
+  }
+  _monitorCache = await getMonitorStatus();
+  _monitorCacheAt = now;
+  return _monitorCache;
+}
+
+async function runLogCleanup() {
+  const days = Number(getEnvString("LOG_RETAIN_DAYS", "30")) || 30;
+  try {
+    const deleted = await logIngestStore.deleteOldEvents(days);
+    if (deleted != null) console.log(`[cleanup] ${deleted} eventos removidos (>${days} dias)`);
+  } catch (err) {
+    console.error("[cleanup] Erro:", err.message);
+  }
+}
 const PORT = Number(getEnvString("PORT", "3000")) || 3000;
 const api = express.Router();
 
@@ -186,11 +211,22 @@ api.get("/info", (req, res) => {
 
 api.get("/monitor", async (req, res) => {
   try {
-    const status = await getMonitorStatus();
+    const force = req.query.force === "1";
+    const status = await getCachedMonitorStatus(force);
     return res.json(status);
   } catch (error) {
     console.error("[/api/monitor] Erro:", error.message);
     return res.status(500).json({ error: "Falha ao calcular status do monitor.", code: "MONITOR_FAILED" });
+  }
+});
+
+api.get("/monitor/history/:name", async (req, res) => {
+  try {
+    const history = await logIngestStore.getAutomationHistory(req.params.name, 7);
+    return res.json({ automation: req.params.name, history });
+  } catch (error) {
+    console.error("[/api/monitor/history] Erro:", error.message);
+    return res.status(500).json({ error: "Falha ao buscar histórico.", code: "HISTORY_FAILED" });
   }
 });
 
@@ -222,7 +258,11 @@ if (require.main === module) {
     console.log(`Jarvis iniciado em http://localhost:${PORT}`);
     console.log(`Frontend servido de: ${frontendDir}`);
     console.log(`Storage mode: ${logIngestStore.getStorageMode()}`);
+    console.log(`Monitor OVERDUE_HOURS: ${getEnvString("MONITOR_OVERDUE_HOURS", "5")} h`);
   });
+  // Limpeza de logs antigos: roda 10s após o startup e depois a cada 7 dias
+  setTimeout(runLogCleanup, 10_000);
+  setInterval(runLogCleanup, 7 * 24 * 60 * 60 * 1000);
 }
 
 module.exports = app;

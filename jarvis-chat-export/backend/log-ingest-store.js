@@ -526,6 +526,71 @@ async function getLastEventForAutomation(automationName, afterTimestamp) {
   return row ? rowToEvent(row) : null;
 }
 
+async function deleteOldEvents(daysOld = 30) {
+  const cutoff = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000).toISOString();
+
+  if (POSTGRES_URL) {
+    await ensurePostgres();
+    const pool = getPool();
+    const result = await pool.query(
+      `DELETE FROM log_events WHERE timestamp < $1::timestamptz`,
+      [cutoff]
+    );
+    return result.rowCount;
+  }
+
+  const db = ensureSqlite();
+  const stmt = db.prepare(`DELETE FROM log_events WHERE timestamp < ?`);
+  stmt.run(cutoff);
+  return null;
+}
+
+async function getAutomationHistory(automationName, limit = 7) {
+  const lim = Math.min(Number(limit) || 7, 20);
+
+  if (POSTGRES_URL) {
+    await ensurePostgres();
+    const pool = getPool();
+    const result = await pool.query(
+      `SELECT run_id,
+              MIN(timestamp) AS ts,
+              MAX(CASE WHEN level = 'ERROR' THEN 1 ELSE 0 END) AS has_error,
+              MAX(status) AS status
+       FROM log_events
+       WHERE LOWER(automation) = LOWER($1) AND run_id IS NOT NULL
+       GROUP BY run_id
+       ORDER BY MIN(timestamp) DESC
+       LIMIT $2`,
+      [automationName, lim]
+    );
+    return result.rows.map((r) => ({
+      timestamp: r.ts instanceof Date ? r.ts.toISOString() : r.ts,
+      hasError: r.has_error === 1 || r.has_error === true,
+      status: r.status || null,
+    }));
+  }
+
+  const db = ensureSqlite();
+  const rows = db
+    .prepare(
+      `SELECT run_id,
+              MIN(timestamp) AS ts,
+              MAX(CASE WHEN level = 'ERROR' THEN 1 ELSE 0 END) AS has_error,
+              MAX(status) AS status
+       FROM log_events
+       WHERE LOWER(automation) = LOWER(?) AND run_id IS NOT NULL
+       GROUP BY run_id
+       ORDER BY MIN(timestamp) DESC
+       LIMIT ?`
+    )
+    .all(automationName, lim);
+  return rows.map((r) => ({
+    timestamp: r.ts,
+    hasError: r.has_error === 1,
+    status: r.status || null,
+  }));
+}
+
 module.exports = {
   appendEvents,
   queryEvents,
@@ -533,4 +598,6 @@ module.exports = {
   getStats,
   getStorageMode,
   getLastEventForAutomation,
+  deleteOldEvents,
+  getAutomationHistory,
 };
