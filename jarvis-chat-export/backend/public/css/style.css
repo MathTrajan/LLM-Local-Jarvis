@@ -199,6 +199,7 @@ body {
   display: flex; flex-direction: column;
   scrollbar-width: thin; scrollbar-color: var(--border) transparent;
 }
+.messages-area.welcome-mode { overflow: hidden; }
 .messages-area::-webkit-scrollbar { width: 3px; }
 .messages-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 

@@ -479,6 +479,7 @@ function renderMessage(role, text, time) {
   const area = DOM.messagesArea();
   const ws   = DOM.welcomeScreen();
   if (ws) ws.remove();
+  if (area) area.classList.remove("welcome-mode");
 
   const t = time || new Date().toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" });
   const wrap = document.createElement("div");
@@ -1219,6 +1220,9 @@ function showChat() {
 function init() {
   const input = DOM.messageInput(), btn = DOM.sendButton();
   if (!input || !btn) return;
+
+  // Desativa scroll enquanto só o globo está visível
+  if (DOM.welcomeScreen()) DOM.messagesArea()?.classList.add("welcome-mode");
 
   updateClock();
   setInterval(updateClock, 1000);
