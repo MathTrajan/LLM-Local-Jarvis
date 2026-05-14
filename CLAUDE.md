@@ -1,312 +1,141 @@
-# JARVIS - Documentacao de Continuidade
+# CLAUDE.md
 
-## Visao Geral
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Jarvis e um agente de observabilidade para automacoes Windows.
+## Contexto do Projeto
 
-Ele nao deve ser tratado como um chatbot generico. O papel do sistema e:
+> Gerado por /mapa em 2026-05-14. Grafo: `G:\Meu Drive\Obsidian Vault\Graphify\Jarvis\graphify-out\Jarvis - Grafo.md` · 34 arquivos · 231 nós · 365 arestas · 51 comunidades
 
-- receber logs estruturados das automacoes via HTTP ingest
-- consultar eventos recentes e historico
-- responder perguntas com base em evidencias reais de execucao
-- ajudar a diagnosticar falhas, timeouts, erros e status operacionais
+### Núcleo do sistema (god nodes)
+- `getEnvString()` — 12 conexões — ponto único de acesso a env vars em todos os módulos Node.js
+- `loadLogsFromSource()` — 11 conexões — hub de carregamento de logs (Google Drive + local)
+- `init()` — 10 conexões — inicialização do banco de dados (SQLite/Postgres)
+- `refreshSystemStatus()` — 9 conexões — frontend polling que atualiza monitor + status
+- `sendMessage()` — 9 conexões — ponto de entrada do chat no frontend
 
-Quando o usuario pergunta algo como:
+### Comunidades principais
+| ID | Nome | Tamanho |
+|---|---|---|
+| C0 | Frontend UI + Chat App | 37 nós |
+| C1 | Log Ingest Store + DB Query | 23 nós |
+| C2 | Config + Env Management | 22 nós |
+| C3 | Monitor + Server Core | 10 nós |
+| C4 | Agent LLM + Response | 9 nós |
+| C5 | Agent Error Handling | 8 nós |
+| C6 | Legacy Acompanhamento Meta | 7 nós |
+| C7 | Legacy Prog Pedidos | 7 nós |
+| C8 | Legacy Saldo Cotia | 7 nós |
+| C9 | Groq LLM Provider | 6 nós |
+| C10-C18 | Automações PS1 individuais (Curva A, Estoque, Matriz, Orçam, Pedidos, Prog, Reposição) | 6 nós cada |
 
-- "o que aconteceu com a automacao X?"
-- "quais erros ocorreram hoje?"
-- "qual foi a ultima execucao da rotina Y?"
+### Conexões não óbvias
+- `processMessage()` chama `getEnvString()` e `getEnvBoolean()` via `config.js` — acoplamento indireto ao config em todo fluxo LLM
+- `runLogCleanup()` também acessa `getEnvString()` — limpeza de logs depende de config centralizado
+- `getEnvString()` é ponto de falha único: qualquer env var ausente quebra agent, server e log-ingest simultaneamente
 
-Jarvis deve buscar contexto de logs antes de responder.
+## Comandos
 
----
+Todos os comandos rodam dentro de `jarvis-chat-export/backend/`:
 
-## Estado Atual do Projeto
-
-Data de referencia desta atualizacao: **2026-05-07**
-
-### O que ja foi feito
-
-1. O frontend foi reposicionado para observabilidade.
-   Antes: interface de assistente generico.
-   Agora: interface focada em erros, execucoes, incidentes e contexto operacional.
-
-2. O backend continua em Node.js + Express com Groq como unico provedor LLM.
-
-3. O endpoint central da arquitetura continua sendo:
-   `POST /api/log-ingest`
-
-4. A persistencia de logs suporta dois modos:
-   - `sqlite` local para desenvolvimento
-   - `postgres` para producao serverless
-
-5. O backend foi preparado para deploy publico em `Vercel + Neon`.
-
-6. O backend serve os assets da interface a partir de:
-   `backend/public`
-
-7. O frontend de trabalho continua em:
-   `frontend/`
-   e foi espelhado para:
-   - `backend/public/index.html`
-   - `backend/public/css/style.css`
-   - `backend/public/js/app.js`
-
-8. Foi adicionada a dependencia:
-   - `pg`
-
-9. Foi criado:
-   - `backend/.vercelignore`
-
-10. O acesso a variaveis de ambiente foi centralizado em:
-   - `jarvis-chat-export/backend/config.js`
-
-11. Foram normalizados:
-   - `server.js`
-   - `agent.js`
-   - `providers/groq.js`
-   - `log-context.js`
-   - `log-ingest-store.js`
-   - `.env.example`
-   - `README.md`
-
-12. Existem scripts PowerShell operacionais adaptados ao Jarvis para uso local/servidor.
-   Eles nao devem subir para o Git.
-
-13. A pasta local `PowerShell/` foi revisada.
-   - Todos os `Auto_Update_*.ps1` ja estavam com integracao Jarvis
-   - `Gestor_Fila_Automacao.ps1` foi adaptado para o mesmo padrao de ingestao
-   - A logica original de mutex, fila e execucao do script filho foi preservada
-
-14. A selecao de contexto por automacao no chat foi corrigida.
-   - Antes: a busca tentava usar a pergunta inteira como filtro textual
-   - Efeito colateral: quando nao encontrava correspondencia, Jarvis caia nos eventos mais recentes e tendia a responder sempre sobre a mesma automacao
-   - Agora: `log-ingest-store.getPromptContext()` detecta a automacao mencionada usando `automation` e `meta.script`
-   - Quando encontra correspondencia, prioriza eventos daquela automacao
-   - O retorno do chat agora pode incluir `contextInfo.focusAutomation`
-
-15. Validacao local da correcao de foco por automacao foi concluida.
-   - pergunta sobre `Programacao de Pedidos` retornou foco em `Programacao_de_Pedidos`
-   - pergunta sobre `Pedidos em Carga` retornou foco em `Pedidos_em_Carga`
-
----
-
-## Stack Atual
-
-| Camada | Tecnologia |
-|---|---|
-| Backend | Node.js + Express |
-| LLM | Groq API |
-| Persistencia local | SQLite via `node:sqlite` |
-| Persistencia producao | Postgres via `pg` |
-| Banco recomendado em producao | Neon Postgres |
-| Logs historicos | Google Drive ou pasta local |
-| Frontend | HTML/CSS/JS puro |
-| Deploy publico | Vercel |
-
----
-
-## Estrutura de Arquivos Relevante
-
-```text
-jarvis-chat-export/
-|-- backend/
-|   |-- server.js
-|   |-- agent.js
-|   |-- config.js
-|   |-- log-context.js
-|   |-- log-ingest-store.js
-|   |-- package.json
-|   |-- .env.example
-|   |-- .vercelignore
-|   |-- public/
-|   |   |-- index.html
-|   |   |-- css/style.css
-|   |   `-- js/app.js
-|   |-- providers/
-|   |   `-- groq.js
-|   `-- data/
-|       `-- jarvis-logs.db
-|-- frontend/
-|   |-- index.html
-|   |-- css/style.css
-|   `-- js/app.js
-|-- PowerShell/                <- pasta operacional local, nao versionar
-`-- .gitignore
+```bash
+npm start        # produção
+npm run dev      # desenvolvimento com nodemon (hot reload)
 ```
 
-Observacoes:
+Não há testes automatizados nem linter. Para validar endpoints manualmente:
 
-- `frontend/` continua como fonte de trabalho visual
-- `backend/public/` e a estrutura usada para deploy no Vercel
-- `backend/config.js` centraliza a leitura de env vars
-- `PowerShell/` existe localmente para copiar scripts ao servidor Windows
-- `jarvis-chat-export/scripts/` e `PowerShell/` sao areas operacionais locais e nao devem subir para o Git
+```bash
+curl http://localhost:3000/api/health
+curl http://localhost:3000/api/info
+curl http://localhost:3000/api/logs-debug
+```
 
----
+## Arquitetura
 
-## Fluxo de Operacao do Jarvis
+Backend Node.js + Express com uma responsabilidade: receber logs de automações Windows via HTTP e responder perguntas sobre elas com LLM (Groq).
 
-```text
-Usuario envia pergunta
-        |
-        v
+### Fluxo de uma mensagem no chat
+
+```
 POST /api/chat
-        |
-        v
-agent.processMessage()
-        |
-        +--> tenta contexto de ingestao em tempo real
-        |    via log-ingest-store.getPromptContext()
-        |
-        +--> se necessario, complementa com log-context.js
-        |    - Google Drive
-        |    - pasta local
-        |
-        `--> monta prompt com contexto operacional
-             e envia para Groq
+  → agent.processMessage()
+      → log-ingest-store.getPromptContext()   ← fonte primária: banco de logs
+          detectAutomationFromEvents()         ← detecta automação citada pelo usuário
+          queryEvents({ automation })          ← prioriza eventos daquela automação
+      → getLogContext()                        ← fallback: Google Drive ou pasta local
+      → groq.chat(messages)                   ← envia contexto + pergunta ao LLM
 ```
 
-### Fontes de contexto
+### Identidade do Jarvis
 
-1. `HTTP ingest`
-   Fonte prioritaria para eventos em tempo real.
-   O backend tenta detectar a automacao citada pelo usuario e focar nela.
+`agent.js → getJarvisSystemPrompt()` define a personalidade: JARVIS é apresentado como criado por Matheus Trajano. Quando perguntado sobre sua origem, não menciona Anthropic, Groq ou qualquer provedor de IA.
 
-2. `Google Drive`
-   Historico ou fallback de logs `.txt`.
+### Persistência dual (SQLite ↔ Postgres)
 
-3. `Pasta local`
-   Alternativa local para leitura de `.txt`.
+`log-ingest-store.js` decide o backend pela presença de `DATABASE_URL` ou `POSTGRES_URL`:
+- **Sem essas vars** → SQLite via `node:sqlite` (nativo), arquivo em `backend/data/jarvis-logs.db`
+- **Com essas vars** → Postgres via `pg`, schema criado automaticamente
 
----
+O modo ativo aparece em `/api/info` e `/api/logs-debug`. Em produção (Vercel), usar Postgres (ex: Neon).
 
-## Comportamento Atual do Chat
+### Detecção de automação no contexto
 
-- Se a pergunta mencionar uma automacao como `Programacao de Pedidos` ou `Pedidos em Carga`, Jarvis deve priorizar eventos dessa automacao
-- A deteccao usa o campo `automation` e tambem `meta.script` dos eventos ingeridos
-- Se nenhuma automacao for identificada, Jarvis usa busca textual geral
-- Se ainda assim nao houver foco claro, Jarvis cai nos eventos mais recentes
-- Se nao existir evidencia suficiente, a resposta correta e declarar que nao encontrou isso nos logs disponiveis
+`detectAutomationFromEvents()` normaliza a pergunta do usuário e os nomes de automação (remove acentos, pontuação, converte separadores) e faz correspondência por substring. Também considera `meta.script` além do campo `automation`. Quando há match, o contexto do LLM é filtrado para aquela automação.
 
----
+### Monitor (`monitor.js`)
 
-## Persistencia de Logs
+Lista estática de automações com schedules. Para cada automação `connected: true`, calcula se houve evento desde o último horário esperado. Status: `ok`, `pending`, `overdue` (>5h sem evento, configurável via `MONITOR_OVERDUE_HOURS`). Cache de 30s em memória via `getCachedMonitorStatus()`.
 
-### Ambiente local
+### Frontend
 
-Se `DATABASE_URL` e `POSTGRES_URL` estiverem vazios:
+Servido como static files pelo próprio Express. Resolução:
+1. `backend/public/` (deploy Vercel)
+2. `frontend/` (fallback legacy)
 
-- Jarvis usa SQLite local
-- arquivo padrao:
-  `backend/data/jarvis-logs.db`
+**`frontend/` é a fonte de trabalho visual.** Após edições, espelhar manualmente para `backend/public/`. O frontend faz polling a cada 30s chamando `refreshSystemStatus()` + `refreshMonitor()`.
 
-### Ambiente de producao
+### Groq com duas chaves
 
-Se `DATABASE_URL` ou `POSTGRES_URL` existir:
+`providers/groq.js` tenta `GROQ_API_KEY_1` + `GROQ_MODEL_1` primeiro, depois `GROQ_API_KEY_2` + `GROQ_MODEL_2` como fallback automático.
 
-- Jarvis usa Postgres
-- `/api/info` e `/api/logs-debug` devem indicar `postgres`
+## Variáveis de ambiente críticas
 
-### Motivo
+| Var | Obrigatória | Descrição |
+|---|---|---|
+| `GROQ_API_KEY_1` | Sim | Chave primária Groq |
+| `LOG_INGEST_API_TOKEN` | Sim | Token Bearer para `POST /api/log-ingest` |
+| `DATABASE_URL` | Em produção | Postgres (Neon). Sem ela, usa SQLite local |
+| `MONITOR_OVERDUE_HOURS` | Não | Horas para marcar automação como overdue (padrão: 5) |
 
-Vercel nao e um ambiente adequado para persistencia duravel em SQLite local.
-Por isso o deploy publico deve usar `Neon Postgres`.
+## Adicionando uma nova automação
 
----
+Quando uma nova automação PowerShell começa a enviar logs:
 
-## Variaveis de Ambiente Criticas
+1. Adicionar entrada no array `AUTOMATIONS` em `monitor.js` com `connected: true` e o `schedule` correto
+2. O campo `name` deve coincidir **exatamente** com o campo `automation` enviado no payload do script PS1
+3. O `displayName` é o que aparece no painel do frontend
 
-Todas as variaveis sao lidas via `config.js`:
+Enquanto `connected: false`, a automação aparece no painel como "não conectada" sem alertas de atraso.
 
-- `getEnvString(name, fallback)`
-- `getEnvBoolean(name, fallback)`
-- `getEnvInt(name, fallback)`
-- `parseJsonEnv(name)`
-- `normalizeLocalDirPath(path)`
+## Padrão dos scripts PS1
 
-```env
-# Servidor
-PORT=3000
-AGENT_ROUTING_STRATEGY=auto
-ALLOWED_ORIGIN=*
+Cada script de automação segue este padrão obrigatório:
+- `Write-Log` → formata a mensagem e classifica nível/status/errorCode
+- `Send-LogsToJarvis` → envia batch de eventos para `POST /api/log-ingest` com Bearer token
+- `Invoke-ComWithRetry` → abre Excel via COM com até 10 tentativas
+- Cópia limpa: `PasteSpecial` só valores + `TabRatio = 0.8` antes de salvar
+- Limpeza de Mashup: `Stop-Process Mashup*` em scripts que usam Power Query com conexões externas
 
-# Groq
-GROQ_API_KEY_1=
-GROQ_API_KEY_2=
-GROQ_MODEL_1=llama-3.3-70b-versatile
-GROQ_MODEL_2=llama-3.1-8b-instant
+## Fila de execução (PowerShell)
 
-# HTTP ingest
-LOG_INGEST_ENABLED=true
-LOG_INGEST_API_TOKEN=troque-por-um-token-seguro
-LOG_INGEST_MAX_CONTEXT_EVENTS=60
+`PowerShell/Gestor_Fila_Automacao.ps1` é o mutex global que evita colisões entre scripts Excel. Usa `Global\ExcelAutomationQueueProbel`, chamado pelas VBS wrappers antes de cada script. Não é invocado diretamente — cada automação aguarda liberação como subprocesso.
 
-# Banco
-DATABASE_URL=postgresql://user:password@host/db?sslmode=require
+## O que não versionar
 
-# Fallback local
-LOG_LOCAL_DIR=G:\Meu Drive\Log
-```
+- `PowerShell/` — scripts operacionais do servidor Windows (já no `.gitignore`)
+- `backend/data/jarvis-logs.db` — banco SQLite local
+- `backend/ngrok.exe` e `ngrok.yml` — tunelamento local
 
----
+## Deploy (Vercel)
 
-## Scripts Operacionais
-
-### Regras
-
-- nao alterar a logica principal das automacoes
-- nao versionar scripts operacionais no Git
-- manter o `.txt` local
-- manter a saida no console
-- acumular eventos estruturados
-- enviar o lote para `POST /api/log-ingest` no final
-
-### Variaveis no servidor Windows
-
-```powershell
-[Environment]::SetEnvironmentVariable(
-  "JARVIS_INGEST_URL",
-  "https://jarvis-observability.vercel.app/api/log-ingest",
-  "Machine"
-)
-
-[Environment]::SetEnvironmentVariable(
-  "JARVIS_INGEST_API_TOKEN",
-  "<token-do-backend>",
-  "Machine"
-)
-```
-
----
-
-## Estado do Deploy
-
-- Projeto alvo documentado: `jarvis-observability`
-- URL alvo documentada: `https://jarvis-observability.vercel.app`
-- O estado real do deploy precisa sempre ser revalidado antes de testes externos
-- Confirmar sempre:
-  - `/api/health`
-  - `/api/info`
-  - `/api/logs-debug`
-
----
-
-## Proximos Passos
-
-1. Validar a correcao de foco por automacao no ambiente publico
-2. Confirmar se o banco em producao esta em `postgres`
-3. Testar ingestao real a partir do servidor Windows
-4. Perguntar no chat por automacoes diferentes e confirmar `contextInfo.focusAutomation`
-5. Ajustar casos de alias adicionais se surgirem nomes de automacao muito diferentes entre pergunta e log
-
----
-
-## Cuidados
-
-- nao subir scripts operacionais para o Git
-- nao usar SQLite como banco principal na Vercel
-- nao apontar scripts para URL publica sem token definido
-- nao confiar so em `.txt` local como historico de producao
-- nao deixar `LOG_INGEST_API_TOKEN` vazio
-
+Entry point: `backend/server.js`. O `backend/.vercelignore` exclui `node_modules`, `data/` e scripts locais. Após deploy, confirmar `/api/info` retornando `"mode": "postgres"`.

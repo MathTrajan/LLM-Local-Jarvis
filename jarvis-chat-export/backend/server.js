@@ -12,6 +12,7 @@ const agent = require("./agent");
 const { hasDriveConfig, getLogContext } = require("./log-context");
 const logIngestStore = require("./log-ingest-store");
 const { getMonitorStatus } = require("./monitor");
+const { sendTelegramMessage } = require("./telegram");
 
 const app = express();
 
@@ -28,6 +29,27 @@ async function getCachedMonitorStatus(force = false) {
   _monitorCache = await getMonitorStatus();
   _monitorCacheAt = now;
   return _monitorCache;
+}
+
+const _overdueNotified = new Set();
+
+async function checkAndNotifyOverdue() {
+  try {
+    const status = await getCachedMonitorStatus(true);
+    const all = [...(status.automations || []), ...(status.dataSources || [])];
+    for (const item of all) {
+      if (item.status === "overdue" && !_overdueNotified.has(item.name)) {
+        _overdueNotified.add(item.name);
+        const msg = `🚨 <b>JARVIS ALERT</b>\n<b>${item.displayName}</b> está atrasada\n${item.hoursElapsed}h sem execução`;
+        await sendTelegramMessage(msg);
+        console.log(`[telegram] Alerta enviado: ${item.displayName}`);
+      } else if (item.status !== "overdue") {
+        _overdueNotified.delete(item.name);
+      }
+    }
+  } catch (err) {
+    console.error("[telegram] Erro ao checar overdues:", err.message);
+  }
 }
 
 async function runLogCleanup() {
@@ -230,6 +252,17 @@ api.get("/monitor/history/:name", async (req, res) => {
   }
 });
 
+api.get("/monitor/daily/:name", async (req, res) => {
+  try {
+    const days  = Math.min(Number(req.query.days || 7), 30);
+    const stats = await logIngestStore.getDailyStats(req.params.name, days);
+    return res.json({ automation: req.params.name, days, stats });
+  } catch (error) {
+    console.error("[/api/monitor/daily] Erro:", error.message);
+    return res.status(500).json({ error: "Falha ao buscar estatísticas diárias.", code: "DAILY_FAILED" });
+  }
+});
+
 api.get("/logs-debug", async (req, res) => {
   try {
     const logs = await getLogContext();
@@ -263,6 +296,9 @@ if (require.main === module) {
   // Limpeza de logs antigos: roda 10s após o startup e depois a cada 7 dias
   setTimeout(runLogCleanup, 10_000);
   setInterval(runLogCleanup, 7 * 24 * 60 * 60 * 1000);
+  // Notificação Telegram para overdues: checar a cada 5 minutos
+  setTimeout(checkAndNotifyOverdue, 20_000);
+  setInterval(checkAndNotifyOverdue, 5 * 60 * 1000);
 }
 
 module.exports = app;

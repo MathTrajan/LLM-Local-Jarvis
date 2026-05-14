@@ -451,6 +451,35 @@ function buildContextFromEvents(events, focusAutomation = null) {
   return lines.join("\n");
 }
 
+function buildHistoryContext(history, stats) {
+  if (!history || history.length === 0) return "";
+  const lines = [];
+  lines.push(`\nHISTÓRICO DE EXECUÇÕES (últimas ${history.length}):`);
+  for (const run of history) {
+    const dt = run.startTs
+      ? new Date(run.startTs).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })
+      : "?";
+    const dur = run.durationMinutes != null ? `${run.durationMinutes}min` : "duração indisponível";
+    const st = run.hasError ? "FALHA" : run.succeeded ? "sucesso" : "incompleto";
+    lines.push(`  ${dt} | duração: ${dur} | ${st} | eventos: ${run.eventCount}`);
+  }
+  if (stats) {
+    const successRate =
+      stats.totalRuns > 0
+        ? Math.round(((stats.totalRuns - stats.failedRuns) / stats.totalRuns) * 100)
+        : null;
+    lines.push(
+      `\nESTATÍSTICAS (${stats.daysBack} dias): ${stats.totalRuns} execuções | ${stats.failedRuns} falhas | sucesso: ${successRate ?? "?"}%`
+    );
+    if (stats.avgDurationMinutes != null) {
+      lines.push(
+        `  Duração: média ${stats.avgDurationMinutes}min | mín ${stats.minDurationMinutes}min | máx ${stats.maxDurationMinutes}min`
+      );
+    }
+  }
+  return lines.join("\n");
+}
+
 async function getPromptContext(userMessage) {
   const maxEvents = Math.max(1, getEnvInt("LOG_INGEST_MAX_CONTEXT_EVENTS", 60));
   const search = userMessage && userMessage.length > 4 ? userMessage : null;
@@ -470,10 +499,25 @@ async function getPromptContext(userMessage) {
     events = recentEvents.slice(0, maxEvents);
   }
 
+  let history = null;
+  let stats = null;
+  if (detectedAutomation) {
+    try {
+      [history, stats] = await Promise.all([
+        getAutomationHistory(detectedAutomation, 7),
+        getRunStats(detectedAutomation, 30),
+      ]);
+    } catch (_) { /* histórico é não-crítico */ }
+  }
+
+  const eventsContext = buildContextFromEvents(events, detectedAutomation);
+  const historyBlock = buildHistoryContext(history, stats);
+  const context = historyBlock ? `${eventsContext}\n${historyBlock}` : eventsContext;
+
   return {
     source: POSTGRES_URL ? "postgres-ingest" : "sqlite-ingest",
     files: events.length,
-    context: buildContextFromEvents(events, detectedAutomation),
+    context,
     events,
     focusAutomation: detectedAutomation,
   };
@@ -553,9 +597,12 @@ async function getAutomationHistory(automationName, limit = 7) {
     const pool = getPool();
     const result = await pool.query(
       `SELECT run_id,
-              MIN(timestamp) AS ts,
+              MIN(timestamp) AS start_ts,
+              MAX(timestamp) AS end_ts,
+              ROUND(EXTRACT(EPOCH FROM (MAX(timestamp) - MIN(timestamp))) / 60, 1) AS duration_minutes,
               MAX(CASE WHEN level = 'ERROR' THEN 1 ELSE 0 END) AS has_error,
-              MAX(status) AS status
+              MAX(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS has_success,
+              COUNT(*) AS event_count
        FROM log_events
        WHERE LOWER(automation) = LOWER($1) AND run_id IS NOT NULL
        GROUP BY run_id
@@ -564,9 +611,13 @@ async function getAutomationHistory(automationName, limit = 7) {
       [automationName, lim]
     );
     return result.rows.map((r) => ({
-      timestamp: r.ts instanceof Date ? r.ts.toISOString() : r.ts,
+      runId: r.run_id,
+      startTs: r.start_ts instanceof Date ? r.start_ts.toISOString() : r.start_ts,
+      endTs: r.end_ts instanceof Date ? r.end_ts.toISOString() : r.end_ts,
+      durationMinutes: r.duration_minutes != null ? Number(r.duration_minutes) : null,
       hasError: r.has_error === 1 || r.has_error === true,
-      status: r.status || null,
+      succeeded: r.has_success === 1 || r.has_success === true,
+      eventCount: Number(r.event_count || 0),
     }));
   }
 
@@ -574,9 +625,12 @@ async function getAutomationHistory(automationName, limit = 7) {
   const rows = db
     .prepare(
       `SELECT run_id,
-              MIN(timestamp) AS ts,
+              MIN(timestamp) AS start_ts,
+              MAX(timestamp) AS end_ts,
+              ROUND((julianday(MAX(timestamp)) - julianday(MIN(timestamp))) * 24 * 60, 1) AS duration_minutes,
               MAX(CASE WHEN level = 'ERROR' THEN 1 ELSE 0 END) AS has_error,
-              MAX(status) AS status
+              MAX(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS has_success,
+              COUNT(*) AS event_count
        FROM log_events
        WHERE LOWER(automation) = LOWER(?) AND run_id IS NOT NULL
        GROUP BY run_id
@@ -585,10 +639,113 @@ async function getAutomationHistory(automationName, limit = 7) {
     )
     .all(automationName, lim);
   return rows.map((r) => ({
-    timestamp: r.ts,
+    runId: r.run_id,
+    startTs: r.start_ts,
+    endTs: r.end_ts,
+    durationMinutes: r.duration_minutes != null ? Number(r.duration_minutes) : null,
     hasError: r.has_error === 1,
-    status: r.status || null,
+    succeeded: r.has_success === 1,
+    eventCount: Number(r.event_count || 0),
   }));
+}
+
+async function getRunStats(automationName, daysBack = 30) {
+  const cutoff = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString();
+
+  if (POSTGRES_URL) {
+    await ensurePostgres();
+    const pool = getPool();
+    const result = await pool.query(
+      `SELECT COUNT(DISTINCT run_id) AS total_runs,
+              ROUND(AVG(EXTRACT(EPOCH FROM (max_ts - min_ts)) / 60)::numeric, 1) AS avg_dur,
+              ROUND(MIN(EXTRACT(EPOCH FROM (max_ts - min_ts)) / 60)::numeric, 1) AS min_dur,
+              ROUND(MAX(EXTRACT(EPOCH FROM (max_ts - min_ts)) / 60)::numeric, 1) AS max_dur,
+              SUM(has_error) AS failed_runs
+       FROM (
+         SELECT run_id,
+                MIN(timestamp) AS min_ts,
+                MAX(timestamp) AS max_ts,
+                MAX(CASE WHEN level = 'ERROR' THEN 1 ELSE 0 END) AS has_error
+         FROM log_events
+         WHERE LOWER(automation) = LOWER($1)
+           AND run_id IS NOT NULL
+           AND timestamp >= $2::timestamptz
+         GROUP BY run_id
+       ) sub`,
+      [automationName, cutoff]
+    );
+    const r = result.rows[0];
+    if (!r || !r.total_runs) return null;
+    return {
+      totalRuns: Number(r.total_runs),
+      failedRuns: Number(r.failed_runs || 0),
+      avgDurationMinutes: r.avg_dur != null ? Number(r.avg_dur) : null,
+      minDurationMinutes: r.min_dur != null ? Number(r.min_dur) : null,
+      maxDurationMinutes: r.max_dur != null ? Number(r.max_dur) : null,
+      daysBack,
+    };
+  }
+
+  const db = ensureSqlite();
+  const row = db.prepare(
+    `SELECT COUNT(DISTINCT run_id) AS total_runs,
+            ROUND(AVG(dur), 1) AS avg_dur,
+            ROUND(MIN(dur), 1) AS min_dur,
+            ROUND(MAX(dur), 1) AS max_dur,
+            SUM(has_error) AS failed_runs
+     FROM (
+       SELECT run_id,
+              ROUND((julianday(MAX(timestamp)) - julianday(MIN(timestamp))) * 24 * 60, 1) AS dur,
+              MAX(CASE WHEN level = 'ERROR' THEN 1 ELSE 0 END) AS has_error
+       FROM log_events
+       WHERE LOWER(automation) = LOWER(?) AND run_id IS NOT NULL AND timestamp >= ?
+       GROUP BY run_id
+     )`
+  ).get(automationName, cutoff);
+
+  if (!row || !row.total_runs) return null;
+  return {
+    totalRuns: Number(row.total_runs),
+    failedRuns: Number(row.failed_runs || 0),
+    avgDurationMinutes: row.avg_dur != null ? Number(row.avg_dur) : null,
+    minDurationMinutes: row.min_dur != null ? Number(row.min_dur) : null,
+    maxDurationMinutes: row.max_dur != null ? Number(row.max_dur) : null,
+    daysBack,
+  };
+}
+
+async function getDailyStats(automationName, days = 7) {
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  if (POSTGRES_URL) {
+    await ensurePostgres();
+    const pool = getPool();
+    const result = await pool.query(
+      `SELECT DATE(timestamp AT TIME ZONE 'America/Sao_Paulo') AS day,
+              COUNT(*) AS total,
+              SUM(CASE WHEN level = 'ERROR' THEN 1 ELSE 0 END) AS errors
+       FROM log_events
+       WHERE LOWER(automation) = LOWER($1) AND timestamp >= $2::timestamptz
+       GROUP BY day ORDER BY day ASC`,
+      [automationName, cutoff]
+    );
+    return result.rows.map(r => ({
+      date: r.day instanceof Date ? r.day.toISOString().slice(0, 10) : String(r.day),
+      total: Number(r.total),
+      errors: Number(r.errors),
+    }));
+  }
+
+  const db = ensureSqlite();
+  const rows = db.prepare(
+    `SELECT DATE(datetime(timestamp, '-3 hours')) AS day,
+            COUNT(*) AS total,
+            SUM(CASE WHEN level = 'ERROR' THEN 1 ELSE 0 END) AS errors
+     FROM log_events
+     WHERE LOWER(automation) = LOWER(?) AND timestamp >= ?
+     GROUP BY day ORDER BY day ASC`
+  ).all(automationName, cutoff);
+  return rows.map(r => ({ date: r.day, total: Number(r.total), errors: Number(r.errors) }));
 }
 
 module.exports = {
@@ -600,4 +757,6 @@ module.exports = {
   getLastEventForAutomation,
   deleteOldEvents,
   getAutomationHistory,
+  getRunStats,
+  getDailyStats,
 };

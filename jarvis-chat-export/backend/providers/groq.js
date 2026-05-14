@@ -13,6 +13,9 @@ const MODEL_1 = getEnvString("GROQ_MODEL_1") || getEnvString("GROQ_MODEL") || "l
 const KEY_2 = getEnvString("GROQ_API_KEY_2") || "";
 const MODEL_2 = getEnvString("GROQ_MODEL_2") || "llama-3.1-8b-instant";
 
+const KEY_3 = getEnvString("GROQ_API_KEY_3") || "";
+const MODEL_3 = getEnvString("GROQ_MODEL_3") || "llama-3.1-8b-instant";
+
 const clients = new Map();
 
 function getClient(apiKey) {
@@ -27,6 +30,9 @@ function getCandidates(modelOverride) {
   const candidates = [{ apiKey: KEY_1, model: modelOverride || MODEL_1, slot: "primary" }];
   if (KEY_2) {
     candidates.push({ apiKey: KEY_2, model: modelOverride || MODEL_2, slot: "secondary" });
+  }
+  if (KEY_3) {
+    candidates.push({ apiKey: KEY_3, model: modelOverride || MODEL_3, slot: "tertiary" });
   }
   return candidates;
 }

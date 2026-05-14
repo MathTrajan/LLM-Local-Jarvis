@@ -251,27 +251,25 @@ function updateContextualSuggestions(automations) {
   const suggestions = DOM.quickSuggestions();
   if (!suggestions) return;
 
-  // Remove card de alerta anterior
-  suggestions.querySelector(".qcard--alert")?.remove();
+  suggestions.querySelectorAll(".qcard--alert").forEach(el => el.remove());
 
   const overdue = automations.filter(a => a.status === "overdue");
   if (!overdue.length) return;
 
-  const names = overdue.map(a => a.displayName);
-  const query = `O que aconteceu com ${names.join(" e ")}? Mostre o status atual, últimos logs e possíveis causas de atraso.`;
+  const alertSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
 
-  const card = document.createElement("button");
-  card.className = "qcard qcard--alert";
-  card.dataset.msg = query;
-  card.style.cssText = "border-color: rgba(255,61,110,0.4); background: rgba(255,61,110,0.06);";
-  card.innerHTML = `
-    <span class="qcard-icon" style="color:var(--danger)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-    </span>
-    <span class="qcard-title" style="color:var(--danger)">ATENÇÃO</span>
-    <span class="qcard-desc">${names.join(", ")} ${names.length > 1 ? "estão atrasadas" : "está atrasada"}</span>
-    <span class="qcard-arrow" style="color:var(--danger)">→</span>`;
-  suggestions.prepend(card);
+  [...overdue].reverse().forEach(a => {
+    const card = document.createElement("button");
+    card.className = "qcard qcard--alert";
+    card.dataset.msg = `Diagnostique a automação ${a.displayName}: quando rodou pela última vez, qual o status e qual a provável causa do atraso?`;
+    card.style.cssText = "border-color:rgba(255,61,110,0.4);background:rgba(255,61,110,0.06);";
+    card.innerHTML = `
+      <span class="qcard-icon" style="color:var(--danger)">${alertSvg}</span>
+      <span class="qcard-title" style="color:var(--danger)">ATRASADA</span>
+      <span class="qcard-desc">${a.displayName}</span>
+      <span class="qcard-arrow" style="color:var(--danger)">→</span>`;
+    suggestions.prepend(card);
+  });
 }
 
 /* ─── Monitor ────────────────────────────────── */
@@ -296,24 +294,34 @@ async function refreshMonitor() {
     const bannerTx = DOM.overdueBannerText();
 
     if (list) {
-      list.innerHTML = data.automations.map(a => {
-        const meta = a.status === "ok"
-          ? formatMonitorTime(a.lastEventAt)
-          : a.status === "overdue"
-          ? `${a.hoursElapsed}h atraso`
-          : a.status === "pending"
-          ? `${a.hoursElapsed}h atrás`
-          : "";
-        const clickable = a.connected ? "monitor-item-clickable" : "";
-        const query = a.connected
-          ? `data-query="O que aconteceu com a automação ${a.displayName}? Mostre o status da última execução, erros e runId se houver."`
-          : "";
-        return `<div class="monitor-item ${a.status} ${clickable}" ${query}>
-          <span class="monitor-dot ${a.status}"></span>
-          <span class="monitor-name" title="${a.displayName}">${a.displayName}</span>
-          <span class="monitor-meta">${meta}</span>
-        </div>`;
-      }).join("");
+      function renderItems(items) {
+        return items.map(a => {
+          const meta = a.status === "ok"
+            ? formatMonitorTime(a.lastEventAt)
+            : a.status === "overdue"
+            ? `${a.hoursElapsed}h atraso`
+            : a.status === "pending"
+            ? `${a.hoursElapsed}h atrás`
+            : "";
+          const clickable = a.connected ? "monitor-item-clickable" : "";
+          const query = a.connected
+            ? `data-query="Diagnostique ${a.displayName}: status da última atualização, horário e erros encontrados."`
+            : "";
+          return `<div class="monitor-item ${a.status} ${clickable}" ${query}>
+            <span class="monitor-dot ${a.status}"></span>
+            <span class="monitor-name" title="${a.displayName}">${a.displayName}</span>
+            <span class="monitor-meta">${meta}</span>
+          </div>`;
+        }).join("");
+      }
+
+      list.innerHTML = renderItems(data.automations || []);
+
+      const dsList = document.getElementById("datasources-list");
+      if (dsList) {
+        const dsHtml = renderItems(data.dataSources || []);
+        dsList.innerHTML = dsHtml || '<div class="monitor-loading">NENHUMA FONTE</div>';
+      }
 
       list.querySelectorAll(".monitor-item-clickable").forEach(el => {
         el.addEventListener("click", () => {
@@ -334,14 +342,16 @@ async function refreshMonitor() {
 
     updateNotificationButton(overdueCount);
 
+    const allItems = [...(data.automations || []), ...(data.dataSources || [])];
+
     // Notificação quando novos overdues aparecem
     if (state.prevOverdueCount !== -1 && overdueCount > state.prevOverdueCount) {
-      showOverdueNotification(data.automations);
+      showOverdueNotification(allItems);
     }
     state.prevOverdueCount = overdueCount;
 
     // Sugestões contextuais na tela de boas-vindas
-    if (DOM.welcomeScreen()) updateContextualSuggestions(data.automations);
+    if (DOM.welcomeScreen()) updateContextualSuggestions(allItems);
 
   } catch (_) {}
 }
@@ -393,13 +403,51 @@ function updateCharCounter(len) {
 /* ─── Markdown ───────────────────────────────── */
 function parseMarkdown(text) {
   if (!text) return "";
-  return text
-    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
-    .replace(/```(\w*)\n?([\s\S]*?)```/g,"<pre><code>$2</code></pre>")
-    .replace(/`([^`]+)`/g,"<code>$1</code>")
-    .replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g,"<em>$1</em>")
-    .replace(/\n/g,"<br>");
+
+  text = text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+  // Protege blocos de código
+  const codeBlocks = [];
+  text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (_,_l,code) => {
+    codeBlocks.push(`<pre><code>${code.trimEnd()}</code></pre>`);
+    return `\x00BLK${codeBlocks.length-1}\x00`;
+  });
+
+  // Processa linha a linha
+  const lines = text.split("\n");
+  const out = [];
+  let inUl = false, inOl = false;
+
+  for (const line of lines) {
+    const ulm = line.match(/^[-*] (.+)/);
+    const olm = line.match(/^\d+\. (.+)/);
+    if (!ulm && inUl) { out.push("</ul>"); inUl = false; }
+    if (!olm && inOl) { out.push("</ol>"); inOl = false; }
+
+    let m;
+    if      ((m = line.match(/^### (.+)/))) out.push(`<h3>${m[1]}</h3>`);
+    else if ((m = line.match(/^## (.+)/)))  out.push(`<h2>${m[1]}</h2>`);
+    else if ((m = line.match(/^# (.+)/)))   out.push(`<h1>${m[1]}</h1>`);
+    else if (ulm) { if (!inUl) { out.push("<ul>"); inUl = true; } out.push(`<li>${ulm[1]}</li>`); }
+    else if (olm) { if (!inOl) { out.push("<ol>"); inOl = true; } out.push(`<li>${olm[1]}</li>`); }
+    else if (/^---+\s*$/.test(line)) out.push("<hr>");
+    else out.push(line);
+  }
+  if (inUl) out.push("</ul>");
+  if (inOl) out.push("</ol>");
+
+  const BLOCK = /^<(h[1-6]|ul|ol|li|hr|pre|\/ul|\/ol)[\s>]/;
+  const html = out.map((line, i, arr) => {
+    if (BLOCK.test(line) || (i > 0 && BLOCK.test(arr[i-1]))) return line;
+    return line === "" ? "<br>" : line + "<br>";
+  }).join("");
+
+  const result = html
+    .replace(/`([^`\n]+)`/g,"<code>$1</code>")
+    .replace(/\*\*([^*\n]+)\*\*/g,"<strong>$1</strong>")
+    .replace(/\*([^*\n]+)\*/g,"<em>$1</em>");
+
+  return codeBlocks.reduce((t,b,i) => t.replace(`\x00BLK${i}\x00`, b), result);
 }
 
 /* ─── Copy text util ─────────────────────────── */
@@ -927,6 +975,43 @@ function buildRunDots(history) {
   return `<div class="ap-run-history"><span class="ap-run-history-label">HISTÓRICO</span>${dots}</div>`;
 }
 
+async function loadDailyStats(name) {
+  try {
+    const res = await fetch(`${API_BASE}/api/monitor/daily/${encodeURIComponent(name)}?days=7`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.stats || [];
+  } catch (_) { return []; }
+}
+
+function buildDailyChart(stats) {
+  // Gera sempre 7 slots (D-6 até hoje), preenchendo com dados reais onde houver
+  const dataMap = {};
+  (stats || []).forEach(d => { dataMap[d.date] = d; });
+
+  const slots = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    slots.push(d.toISOString().slice(0, 10));
+  }
+
+  const maxTotal = Math.max(1, ...slots.map(s => dataMap[s]?.total || 0));
+  const bars = slots.map(date => {
+    const day = dataMap[date];
+    const total  = day?.total  || 0;
+    const errors = day?.errors || 0;
+    const pct = total > 0 ? Math.max(18, Math.round(total / maxTotal * 100)) : 0;
+    const cls = errors > 0 ? "has-error" : total > 0 ? "ok" : "empty";
+    const label = date.slice(5).replace("-", "/");
+    return `<div class="ap-bar-wrap" title="${date}: ${total} eventos, ${errors} erros">
+      <div class="ap-bar ${cls}" style="height:${pct}%"></div>
+      <span class="ap-bar-day">${label}</span>
+    </div>`;
+  }).join("");
+  return `<div class="ap-chart"><span class="ap-chart-label">ATIVIDADE 7 DIAS</span><div class="ap-bars">${bars}</div></div>`;
+}
+
 async function loadAutomationHistory(name) {
   try {
     const res = await fetch(`${API_BASE}/api/monitor/history/${encodeURIComponent(name)}`);
@@ -950,22 +1035,26 @@ async function renderAutomationsPanel() {
       return;
     }
 
-    // Carrega histórico de todas as automações conectadas
-    const historyMap = {};
-    for (const a of data.automations) {
-      if (a.connected) {
-        historyMap[a.name] = await loadAutomationHistory(a.name);
-      }
-    }
+    // Carrega histórico e stats diárias em paralelo para todas as conectadas
+    const historyMap = {}, dailyMap = {};
+    await Promise.all(data.automations.filter(a => a.connected).map(async a => {
+      [historyMap[a.name], dailyMap[a.name]] = await Promise.all([
+        loadAutomationHistory(a.name),
+        loadDailyStats(a.name),
+      ]);
+    }));
 
     grid.innerHTML = data.automations.map(a => {
-      const connected = a.connected;
+      const connected   = a.connected;
       const statusClass = a.status || "not_connected";
       const statusLabel = STATUS_PT[statusClass] || statusClass.toUpperCase();
       const lastTime    = formatMonitorTimeFull(a.lastEventAt);
       const elapsed     = a.hoursElapsed != null ? `${a.hoursElapsed}h atrás` : "—";
       const askDisabled = connected ? "" : "disabled";
       const historyHtml = buildRunDots(historyMap[a.name]);
+      const chartHtml   = buildDailyChart(dailyMap[a.name]);
+      const runs        = historyMap[a.name] || [];
+      const successRate = runs.length ? Math.round(runs.filter(r => !r.hasError).length / runs.length * 100) : null;
 
       return `<div class="ap-card ${statusClass === "overdue" ? "ap-card--overdue" : ""}" data-status="${statusClass}">
         <div class="ap-card-head">
@@ -983,10 +1072,11 @@ async function renderAutomationsPanel() {
             <span class="ap-row-val ${statusClass === "overdue" ? "danger" : ""}">${elapsed}</span>
           </div>
           <div class="ap-row">
-            <span class="ap-row-label">CONEXÃO</span>
-            <span class="ap-row-val ${connected ? "" : "dim"}">${connected ? "ATIVA" : "DESCONECTADA"}</span>
+            <span class="ap-row-label">TAXA SUCESSO</span>
+            <span class="ap-row-val ${successRate !== null && successRate < 70 ? "danger" : ""}">${successRate !== null ? successRate + "% OK" : "—"}</span>
           </div>
         </div>
+        ${chartHtml}
         ${historyHtml}
         <button class="ap-ask-btn" data-name="${a.displayName}" ${askDisabled}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
@@ -1001,7 +1091,7 @@ async function renderAutomationsPanel() {
         showChat();
         const input = DOM.messageInput();
         if (input) {
-          input.value = `O que aconteceu com a automação ${name}? Mostre o status da última execução, erros e runId se houver.`;
+          input.value = `Diagnostique a automação ${name}: status da última execução, horário, duração e erros encontrados.`;
           input.dispatchEvent(new Event("input"));
           sendMessage();
         }
@@ -1016,14 +1106,85 @@ async function renderAutomationsPanel() {
   }
 }
 
+async function renderDatasourcesPanel() {
+  const grid = document.getElementById("ds-grid");
+  if (!grid) return;
+  grid.innerHTML = '<div class="ap-loading">CARREGANDO...</div>';
+  try {
+    const res = await fetch(`${API_BASE}/api/monitor`);
+    if (!res.ok) throw new Error("API indisponível");
+    const data = await res.json();
+    const sources = data.dataSources || [];
+
+    if (!sources.length) {
+      grid.innerHTML = '<div class="ap-loading">NENHUMA FONTE DE DADOS CONFIGURADA</div>';
+      return;
+    }
+
+    const historyMap = {}, dailyMap = {};
+    await Promise.all(sources.filter(a => a.connected).map(async a => {
+      [historyMap[a.name], dailyMap[a.name]] = await Promise.all([
+        loadAutomationHistory(a.name),
+        loadDailyStats(a.name),
+      ]);
+    }));
+
+    grid.innerHTML = sources.map(a => {
+      const statusClass = a.status || "not_connected";
+      const statusLabel = STATUS_PT[statusClass] || statusClass.toUpperCase();
+      const lastTime    = formatMonitorTimeFull(a.lastEventAt);
+      const elapsed     = a.hoursElapsed != null ? `${a.hoursElapsed}h atrás` : "—";
+      const askDisabled = a.connected ? "" : "disabled";
+      const historyHtml = buildRunDots(historyMap[a.name]);
+      const chartHtml   = buildDailyChart(dailyMap[a.name]);
+      const runs        = historyMap[a.name] || [];
+      const successRate = runs.length ? Math.round(runs.filter(r => !r.hasError).length / runs.length * 100) : null;
+      return `<div class="ap-card ${statusClass === "overdue" ? "ap-card--overdue" : ""}" data-status="${statusClass}">
+        <div class="ap-card-head">
+          <span class="ap-dot ${statusClass}"></span>
+          <span class="ap-card-name">${a.displayName}</span>
+          <span class="ap-badge ${statusClass}">${statusLabel}</span>
+        </div>
+        <div class="ap-rows">
+          <div class="ap-row"><span class="ap-row-label">ÚLTIMA ATUALIZAÇÃO</span><span class="ap-row-val dim">${lastTime}</span></div>
+          <div class="ap-row"><span class="ap-row-label">TEMPO DECORRIDO</span><span class="ap-row-val ${statusClass === "overdue" ? "danger" : ""}">${elapsed}</span></div>
+          <div class="ap-row"><span class="ap-row-label">TAXA SUCESSO</span><span class="ap-row-val ${successRate !== null && successRate < 70 ? "danger" : ""}">${successRate !== null ? successRate + "% OK" : "—"}</span></div>
+        </div>
+        ${chartHtml}
+        ${historyHtml}
+        <button class="ap-ask-btn" data-name="${a.displayName}" ${askDisabled}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          DIAGNOSTICAR
+        </button>
+      </div>`;
+    }).join("");
+
+    grid.querySelectorAll(".ap-ask-btn:not([disabled])").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const name = btn.getAttribute("data-name");
+        showChat();
+        const input = DOM.messageInput();
+        if (input) {
+          input.value = `Diagnostique ${name}: status da última atualização, horário, duração e erros encontrados.`;
+          input.dispatchEvent(new Event("input"));
+          sendMessage();
+        }
+      });
+    });
+  } catch (err) {
+    grid.innerHTML = `<div class="ap-loading">ERRO: ${err.message}</div>`;
+  }
+}
+
 function setNavActive(view) {
-  const isChat = view === "chat";
-  document.getElementById("nav-jarvis")?.classList.toggle("active", isChat);
-  document.getElementById("nav-automacoes")?.classList.toggle("active", !isChat);
+  document.getElementById("nav-jarvis")?.classList.toggle("active", view === "chat");
+  document.getElementById("nav-automacoes")?.classList.toggle("active", view === "automations");
+  document.getElementById("nav-dados")?.classList.toggle("active", view === "dados");
 }
 
 function showAutomations() {
   document.getElementById("automations-panel").hidden  = false;
+  document.getElementById("datasources-panel").hidden  = true;
   document.getElementById("messages-area").hidden      = true;
   document.getElementById("typing-indicator").hidden   = true;
   document.getElementById("input-area").hidden         = true;
@@ -1031,8 +1192,19 @@ function showAutomations() {
   renderAutomationsPanel();
 }
 
+function showDados() {
+  document.getElementById("automations-panel").hidden  = true;
+  document.getElementById("datasources-panel").hidden  = false;
+  document.getElementById("messages-area").hidden      = true;
+  document.getElementById("typing-indicator").hidden   = true;
+  document.getElementById("input-area").hidden         = true;
+  setNavActive("dados");
+  renderDatasourcesPanel();
+}
+
 function showChat() {
-  document.getElementById("automations-panel").hidden = true;
+  document.getElementById("automations-panel").hidden  = true;
+  document.getElementById("datasources-panel").hidden  = true;
   document.getElementById("messages-area").hidden      = false;
   document.getElementById("input-area").hidden         = false;
   setNavActive("chat");
@@ -1084,13 +1256,16 @@ function init() {
 
   btn.addEventListener("click", sendMessage);
 
-  DOM.messagesArea()?.addEventListener("click", e => {
+  function handleQcardClick(e) {
     const card = e.target.closest(".qcard");
     if (card) {
       const msg = card.getAttribute("data-msg");
       if (msg) { input.value = msg; input.dispatchEvent(new Event("input")); sendMessage(); }
     }
-  });
+  }
+
+  DOM.messagesArea()?.addEventListener("click", handleQcardClick);
+  DOM.quickSuggestions()?.addEventListener("click", handleQcardClick);
 
   DOM.btnClearChat()?.addEventListener("click", () => {
     clearChatStorage();
@@ -1119,8 +1294,11 @@ function init() {
   // Nav: sidebar
   document.getElementById("nav-jarvis")?.addEventListener("click", showChat);
   document.getElementById("nav-automacoes")?.addEventListener("click", showAutomations);
+  document.getElementById("nav-dados")?.addEventListener("click", showDados);
 
   document.getElementById("ap-back-btn")?.addEventListener("click", showChat);
+  document.getElementById("ds-back-btn")?.addEventListener("click", showChat);
+  document.getElementById("ds-refresh-btn")?.addEventListener("click", renderDatasourcesPanel);
   document.getElementById("ap-refresh-btn")?.addEventListener("click", renderAutomationsPanel);
 
   // Filtros do painel de automações

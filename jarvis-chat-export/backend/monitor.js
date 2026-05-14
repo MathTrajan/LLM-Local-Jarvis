@@ -45,9 +45,9 @@ const AUTOMATIONS = [
   { name: "Curva_A_30Dias",          displayName: "Curva A 30 Dias",         connected: true,
     schedule: { type: "daily",    times: ["01:00"] } },
 
-  // Matriz Afiliados: seg-sex às 02:00
+  // Matriz Afiliados: seg, qua e sex às 02:00
   { name: "Matriz_Afiliados",        displayName: "Matriz Afiliados",        connected: true,
-    schedule: { type: "weekdays", times: ["02:00"] } },
+    schedule: { type: "specific_weekdays", weekdays: [1, 3, 5], times: ["02:00"] } },
 
   // Orçamento + Acompanhamento: seg-sex 06:10, 10:00, 13:00, 16:00
   { name: "Orcam_Acomp",             displayName: "Orçamento + Acompanhamento", connected: true,
@@ -64,6 +64,13 @@ const AUTOMATIONS = [
   // Reposição de Estoque: diário 07:00 e 14:00
   { name: "Reposicao_de_Estoque",    displayName: "Reposição de Estoque",    connected: true,
     schedule: { type: "daily",    times: ["07:00", "14:00"] } },
+
+];
+
+const DATA_SOURCES = [
+  // Power BI Ecommerce: diário 07:30, 12:00, 15:30, 19:00
+  { name: "PowerBI_Ecommerce",       displayName: "Power BI Ecommerce",      connected: true,
+    schedule: { type: "daily",    times: ["07:30", "12:00", "15:30", "19:00"] } },
 ];
 
 function toLocal(utcDate) {
@@ -74,8 +81,8 @@ function getLastExpectedRun(schedule, nowUtc) {
   const nowLocal = toLocal(nowUtc);
   const candidates = [];
 
-  // Mensais precisam de lookback maior (até 31 dias) para achar o último dia agendado
-  const maxDaysBack = schedule.type === "monthly" ? 31 : 1;
+  // Mensais: até 31 dias; dias específicos da semana: até 7 (ex: sex→seg); resto: 1
+  const maxDaysBack = schedule.type === "monthly" ? 31 : schedule.type === "specific_weekdays" ? 7 : 1;
 
   for (let offset = 0; offset <= maxDaysBack; offset++) {
     const day = new Date(nowLocal);
@@ -85,9 +92,10 @@ function getLastExpectedRun(schedule, nowUtc) {
     const dom = day.getDate();
 
     let runs = false;
-    if (schedule.type === "daily")    runs = true;
-    if (schedule.type === "weekdays") runs = dow >= 1 && dow <= 5;
-    if (schedule.type === "monthly")  runs = (schedule.days || []).includes(dom);
+    if (schedule.type === "daily")             runs = true;
+    if (schedule.type === "weekdays")          runs = dow >= 1 && dow <= 5;
+    if (schedule.type === "specific_weekdays") runs = (schedule.weekdays || []).includes(dow);
+    if (schedule.type === "monthly")           runs = (schedule.days || []).includes(dom);
     if (!runs) continue;
 
     for (const timeStr of schedule.times) {
@@ -106,11 +114,9 @@ function getLastExpectedRun(schedule, nowUtc) {
   return candidates.sort((a, b) => b - a)[0];
 }
 
-async function getMonitorStatus() {
-  const nowUtc = new Date();
-
-  const results = await Promise.all(
-    AUTOMATIONS.map(async (auto) => {
+async function evaluateItems(items, nowUtc) {
+  return Promise.all(
+    items.map(async (auto) => {
       if (!auto.connected) {
         return { name: auto.name, displayName: auto.displayName, connected: false, status: "not_connected", lastExpectedRun: null, lastEventAt: null, hoursElapsed: null };
       }
@@ -139,11 +145,21 @@ async function getMonitorStatus() {
       };
     })
   );
+}
 
+async function getMonitorStatus() {
+  const nowUtc = new Date();
+  const [automations, dataSources] = await Promise.all([
+    evaluateItems(AUTOMATIONS, nowUtc),
+    evaluateItems(DATA_SOURCES, nowUtc),
+  ]);
+
+  const allItems = [...automations, ...dataSources];
   return {
     timestamp: nowUtc.toISOString(),
-    overdueCount: results.filter((r) => r.status === "overdue").length,
-    automations: results,
+    overdueCount: allItems.filter((r) => r.status === "overdue").length,
+    automations,
+    dataSources,
   };
 }
 

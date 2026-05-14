@@ -319,6 +319,13 @@ body {
 .message-bubble pre code { background: none; border: none; padding: 0; color: #b8e0f5; }
 .message-bubble strong { color: var(--text); font-weight: 600; }
 .message-bubble em { color: var(--text2); }
+.message-bubble h1,.message-bubble h2,.message-bubble h3 { font-family: var(--font-ui); font-weight: 600; color: var(--p); margin: 10px 0 4px; letter-spacing: .04em; }
+.message-bubble h1 { font-size: 15px; }
+.message-bubble h2 { font-size: 14px; }
+.message-bubble h3 { font-size: 13px; color: var(--text2); }
+.message-bubble ul,.message-bubble ol { margin: 6px 0 6px 18px; padding: 0; }
+.message-bubble li { margin: 3px 0; line-height: 1.6; }
+.message-bubble hr { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
 
 /* ═══════════ TYPING ═══════════ */
 .typing-indicator { display: flex; align-items: center; gap: 10px; padding: 4px 28px; animation: fade-in 0.2s ease; }
@@ -392,6 +399,7 @@ body {
 .rs-data-value--accent { color: var(--success); text-shadow: 0 0 6px rgba(0,255,157,0.3); }
 
 .monitor-list { display: flex; flex-direction: column; gap: 5px; max-height: 380px; overflow-y: auto; scrollbar-width: none; }
+.monitor-section-label { font-size: 9px; font-family: var(--font-hud); letter-spacing: .12em; color: var(--text2); padding: 8px 8px 3px; opacity: .7; }
 .monitor-list::-webkit-scrollbar { display: none; }
 .monitor-loading { font-size: 11px; color: var(--text2); text-align: center; padding: 8px 0; }
 .monitor-item { display: flex; align-items: center; gap: 7px; padding: 7px 8px; border-radius: var(--rsm); background: rgba(0,217,255,0.03); transition: background var(--t); }
@@ -512,6 +520,17 @@ body {
 .ap-filter-btn.af-overdue.active { background: rgba(255,61,110,0.1); border-color: rgba(255,61,110,0.4); color: var(--danger); }
 .ap-filter-btn.af-pending.active { background: rgba(255,184,0,0.08); border-color: rgba(255,184,0,0.3); color: var(--warn); }
 .ap-filter-btn.af-ok.active     { background: rgba(0,255,157,0.08); border-color: rgba(0,255,157,0.3); color: var(--success); }
+
+/* ═══════════ DAILY ACTIVITY CHART ═══════════ */
+.ap-chart { margin: 10px 0 6px; }
+.ap-chart-label { font-family: var(--font-mono); font-size: 8px; color: var(--text3); letter-spacing: 1px; display: block; margin-bottom: 6px; }
+.ap-bars { display: flex; align-items: flex-end; gap: 3px; height: 48px; }
+.ap-bar-wrap { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1; height: 100%; justify-content: flex-end; }
+.ap-bar { width: 100%; border-radius: 2px 2px 0 0; transition: height 0.3s ease; min-height: 2px; }
+.ap-bar.ok        { background: var(--success); opacity: 0.7; }
+.ap-bar.has-error { background: var(--danger);  opacity: 0.8; }
+.ap-bar.empty     { background: var(--border);  opacity: 0.4; height: 2px !important; }
+.ap-bar-day { font-family: var(--font-mono); font-size: 7px; color: var(--text3); letter-spacing: 0; white-space: nowrap; }
 
 /* ═══════════ AUTOMATION RUN HISTORY DOTS ═══════════ */
 .ap-run-history {

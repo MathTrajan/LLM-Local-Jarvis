@@ -79,6 +79,12 @@
             </span>
             <span class="nav-label">AUTOMAÇÕES</span>
           </button>
+          <button class="nav-item" id="nav-dados" title="Fontes de Dados">
+            <span class="nav-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            </span>
+            <span class="nav-label">DADOS</span>
+          </button>
         </nav>
         <div class="nav-footer">
           <div class="nav-avatar">
@@ -151,6 +157,29 @@
                 <span class="qcard-arrow">→</span>
               </button>
             </div>
+          </div>
+        </section>
+
+        <!-- ══ Painel de fontes de dados ══ -->
+        <section class="automations-panel" id="datasources-panel" hidden>
+          <div class="ap-header">
+            <div class="ap-header-left">
+              <button class="ap-back-btn" id="ds-back-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="15 18 9 12 15 6"/></svg>
+                CHAT
+              </button>
+              <div>
+                <div class="ap-title">FONTES DE DADOS</div>
+                <div class="ap-subtitle">STATUS EM TEMPO REAL • CLIQUE PARA DIAGNOSTICAR</div>
+              </div>
+            </div>
+            <button class="ap-refresh-btn" id="ds-refresh-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.06-4.43"/></svg>
+              ATUALIZAR
+            </button>
+          </div>
+          <div class="ap-grid" id="ds-grid">
+            <div class="ap-loading">CARREGANDO FONTES DE DADOS...</div>
           </div>
         </section>
 
@@ -240,6 +269,13 @@
             <span class="monitor-badge" id="monitor-overdue-badge" hidden>0</span>
           </div>
           <div id="monitor-list" class="monitor-list">
+            <div class="monitor-loading">CARREGANDO...</div>
+          </div>
+        </div>
+        <!-- DADOS (Power BI e fontes externas) -->
+        <div class="rs-card" id="rs-datasources-card">
+          <div class="rs-card-title">DADOS</div>
+          <div id="datasources-list" class="monitor-list">
             <div class="monitor-loading">CARREGANDO...</div>
           </div>
         </div>
