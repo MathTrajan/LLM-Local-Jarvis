@@ -971,14 +971,24 @@ function applyFilter(filter) {
   });
 }
 
-function buildRunDots(history) {
-  if (!history || !history.length) return "";
-  const dots = history.map(r => {
-    const cls = r.hasError ? "error" : (r.status === "ok" || r.status === "SUCESSO") ? "ok" : "unknown";
-    const dt = r.timestamp ? new Date(r.timestamp).toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" }) : "";
-    return `<span class="ap-run-dot ${cls}" title="${dt}"></span>`;
-  }).reverse().join("");
-  return `<div class="ap-run-history"><span class="ap-run-history-label">HISTÓRICO</span>${dots}</div>`;
+function buildRunDots(history, dailyStats) {
+  // Preferência: pontos por execução (run_id) — fallback: pontos por dia (dailyStats)
+  if (history && history.length) {
+    const dots = history.map(r => {
+      const cls = r.hasError ? "error" : (r.status === "ok" || r.status === "SUCESSO") ? "ok" : "unknown";
+      const dt = r.startTs ? new Date(r.startTs).toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" }) : "";
+      return `<span class="ap-run-dot ${cls}" title="${dt}"></span>`;
+    }).reverse().join("");
+    return `<div class="ap-run-history"><span class="ap-run-history-label">HISTÓRICO</span>${dots}</div>`;
+  }
+  if (dailyStats && dailyStats.length) {
+    const dots = dailyStats.map(d => {
+      const cls = d.errors > 0 ? "error" : d.total > 0 ? "ok" : "empty";
+      return `<span class="ap-run-dot ${cls}" title="${d.date}: ${d.total} eventos, ${d.errors} erros"></span>`;
+    }).join("");
+    return `<div class="ap-run-history"><span class="ap-run-history-label">HISTÓRICO</span>${dots}</div>`;
+  }
+  return "";
 }
 
 async function loadDailyStats(name) {
@@ -1054,13 +1064,20 @@ async function renderAutomationsPanel() {
       const connected   = a.connected;
       const statusClass = a.status || "not_connected";
       const statusLabel = STATUS_PT[statusClass] || statusClass.toUpperCase();
-      const lastTime    = formatMonitorTimeFull(a.lastEventAt);
       const elapsed     = a.hoursElapsed != null ? `${a.hoursElapsed}h atrás` : "—";
       const askDisabled = connected ? "" : "disabled";
-      const historyHtml = buildRunDots(historyMap[a.name]);
-      const chartHtml   = buildDailyChart(dailyMap[a.name]);
+      const daily       = dailyMap[a.name] || [];
+      const historyHtml = buildRunDots(historyMap[a.name], daily);
       const runs        = historyMap[a.name] || [];
-      const successRate = runs.length ? Math.round(runs.filter(r => !r.hasError).length / runs.length * 100) : null;
+      // Taxa de sucesso: prioriza runs com runId; fallback usa eventos diários
+      let successRate = null;
+      if (runs.length) {
+        successRate = Math.round(runs.filter(r => !r.hasError).length / runs.length * 100);
+      } else if (daily.length) {
+        const tot = daily.reduce((s, d) => s + d.total, 0);
+        const err = daily.reduce((s, d) => s + d.errors, 0);
+        if (tot > 0) successRate = Math.round((tot - err) / tot * 100);
+      }
 
       return `<div class="ap-card ${statusClass === "overdue" ? "ap-card--overdue" : ""}" data-status="${statusClass}">
         <div class="ap-card-head">
@@ -1070,10 +1087,6 @@ async function renderAutomationsPanel() {
         </div>
         <div class="ap-rows">
           <div class="ap-row">
-            <span class="ap-row-label">ÚLTIMA EXECUÇÃO</span>
-            <span class="ap-row-val dim">${lastTime}</span>
-          </div>
-          <div class="ap-row">
             <span class="ap-row-label">TEMPO DECORRIDO</span>
             <span class="ap-row-val ${statusClass === "overdue" ? "danger" : ""}">${elapsed}</span>
           </div>
@@ -1082,7 +1095,6 @@ async function renderAutomationsPanel() {
             <span class="ap-row-val ${successRate !== null && successRate < 70 ? "danger" : ""}">${successRate !== null ? successRate + "% OK" : "—"}</span>
           </div>
         </div>
-        ${chartHtml}
         ${historyHtml}
         <button class="ap-ask-btn" data-name="${a.displayName}" ${askDisabled}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
@@ -1138,13 +1150,19 @@ async function renderDatasourcesPanel() {
     grid.innerHTML = sources.map(a => {
       const statusClass = a.status || "not_connected";
       const statusLabel = STATUS_PT[statusClass] || statusClass.toUpperCase();
-      const lastTime    = formatMonitorTimeFull(a.lastEventAt);
       const elapsed     = a.hoursElapsed != null ? `${a.hoursElapsed}h atrás` : "—";
       const askDisabled = a.connected ? "" : "disabled";
-      const historyHtml = buildRunDots(historyMap[a.name]);
-      const chartHtml   = buildDailyChart(dailyMap[a.name]);
+      const daily2      = dailyMap[a.name] || [];
+      const historyHtml = buildRunDots(historyMap[a.name], daily2);
       const runs        = historyMap[a.name] || [];
-      const successRate = runs.length ? Math.round(runs.filter(r => !r.hasError).length / runs.length * 100) : null;
+      let successRate   = null;
+      if (runs.length) {
+        successRate = Math.round(runs.filter(r => !r.hasError).length / runs.length * 100);
+      } else if (daily2.length) {
+        const tot = daily2.reduce((s, d) => s + d.total, 0);
+        const err = daily2.reduce((s, d) => s + d.errors, 0);
+        if (tot > 0) successRate = Math.round((tot - err) / tot * 100);
+      }
       return `<div class="ap-card ${statusClass === "overdue" ? "ap-card--overdue" : ""}" data-status="${statusClass}">
         <div class="ap-card-head">
           <span class="ap-dot ${statusClass}"></span>
@@ -1152,11 +1170,9 @@ async function renderDatasourcesPanel() {
           <span class="ap-badge ${statusClass}">${statusLabel}</span>
         </div>
         <div class="ap-rows">
-          <div class="ap-row"><span class="ap-row-label">ÚLTIMA ATUALIZAÇÃO</span><span class="ap-row-val dim">${lastTime}</span></div>
           <div class="ap-row"><span class="ap-row-label">TEMPO DECORRIDO</span><span class="ap-row-val ${statusClass === "overdue" ? "danger" : ""}">${elapsed}</span></div>
           <div class="ap-row"><span class="ap-row-label">TAXA SUCESSO</span><span class="ap-row-val ${successRate !== null && successRate < 70 ? "danger" : ""}">${successRate !== null ? successRate + "% OK" : "—"}</span></div>
         </div>
-        ${chartHtml}
         ${historyHtml}
         <button class="ap-ask-btn" data-name="${a.displayName}" ${askDisabled}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
