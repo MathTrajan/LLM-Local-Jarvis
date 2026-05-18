@@ -158,9 +158,13 @@ api.post("/chat", chatRateLimiter, async (req, res) => {
       contextInfo: response.contextInfo,
     });
   } catch (err) {
-    console.error("[/api/chat] Erro:", err.message);
+    console.error("[/api/chat] Erro:", err.message, err.details || "");
     if (err.name === "AgentError") {
-      return res.status(503).json({ error: err.message, code: "AGENT_UNAVAILABLE" });
+      // Header x-debug=1 retorna detalhes do erro subjacente (debugging de Groq)
+      const debug = req.headers["x-debug"] === "1";
+      const body = { error: err.message, code: "AGENT_UNAVAILABLE" };
+      if (debug) body.debug = err.details || null;
+      return res.status(503).json(body);
     }
     return res.status(500).json({ error: "Erro interno no Jarvis.", code: "INTERNAL_ERROR" });
   }
