@@ -60,7 +60,7 @@ const AUTOMATIONS = [
     schedule: { type: "weekdays", times: intervalTimes("06:20", 60, 12) } },
 
   // Estoque Analítico EC: seg-sex 07:00 e 15:00
-  { name: "atualizar-estoque-analitico", displayName: "Estoque Analítico EC", connected: true,
+  { name: "Estoque_Analitico_EC",    displayName: "Estoque Analítico EC",    connected: true,
     schedule: { type: "weekdays", times: ["07:00", "15:00"] } },
 
   // Orçamento + Acompanhamento + Produto: seg-sex 06:10, 10:00, 13:00, 16:00
