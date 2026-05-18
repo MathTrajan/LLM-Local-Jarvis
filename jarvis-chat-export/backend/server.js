@@ -160,11 +160,12 @@ api.post("/chat", chatRateLimiter, async (req, res) => {
   } catch (err) {
     console.error("[/api/chat] Erro:", err.message, err.details || "");
     if (err.name === "AgentError") {
-      // Header x-debug=1 retorna detalhes do erro subjacente (debugging de Groq)
-      const debug = req.headers["x-debug"] === "1";
-      const body = { error: err.message, code: "AGENT_UNAVAILABLE" };
-      if (debug) body.debug = err.details || null;
-      return res.status(503).json(body);
+      // Detecta rate limit do Groq pra dar mensagem util ao usuario
+      const isRateLimit = /rate_limit|too large|TPM/i.test(err.details?.primaryError || "");
+      const userMessage = isRateLimit
+        ? "Muitos eventos no contexto para o tier atual do Groq. Tente uma pergunta mais especifica ou aguarde 1 min."
+        : err.message;
+      return res.status(503).json({ error: userMessage, code: "AGENT_UNAVAILABLE" });
     }
     return res.status(500).json({ error: "Erro interno no Jarvis.", code: "INTERNAL_ERROR" });
   }

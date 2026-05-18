@@ -477,7 +477,9 @@ function buildContextFromEvents(events, focusAutomation = null) {
       details.push(`tags=${event.tags.join("|")}`);
     }
     const detailSuffix = details.length > 0 ? ` | ${details.join(" | ")}` : "";
-    lines.push(`[${formatBrt(event.timestamp)} BRT] [${event.level}] [${event.automation}] ${event.message}${detailSuffix}`);
+    // Trunca mensagens muito longas (ex: dumps de upload) para nao estourar o TPM do Groq
+    const msg = event.message.length > 400 ? event.message.slice(0, 400) + "…" : event.message;
+    lines.push(`[${formatBrt(event.timestamp)} BRT] [${event.level}] [${event.automation}] ${msg}${detailSuffix}`);
   }
 
   return lines.join("\n");
@@ -512,7 +514,8 @@ function buildHistoryContext(history, stats) {
 }
 
 async function getPromptContext(userMessage, automationHint = null) {
-  const maxEvents = Math.max(1, getEnvInt("LOG_INGEST_MAX_CONTEXT_EVENTS", 60));
+  // Default 25: o tier gratuito do Groq tem TPM 6000. Com 60 eventos o request batia 6300+.
+  const maxEvents = Math.max(1, getEnvInt("LOG_INGEST_MAX_CONTEXT_EVENTS", 25));
   const search = userMessage && userMessage.length > 4 ? userMessage : null;
   const recentEvents = await queryEvents({ limit: Math.max(maxEvents * 3, 120) });
   // Quando o front passa a automação explicitamente (botão DIAGNOSTICAR), pula a detecção por texto
