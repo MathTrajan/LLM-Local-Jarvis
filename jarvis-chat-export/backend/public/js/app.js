@@ -17,6 +17,7 @@ const state = {
   prevOverdueCount: -1,    // para detectar novas ocorrências de overdue
   notifEnabled: false,
   currentFilter: "all",
+  nextAutomation: null,    // dica de automação para o próximo /api/chat (set pelo botão DIAGNOSTICAR)
 };
 
 const DOM = {
@@ -540,9 +541,14 @@ async function sendMessage() {
 
   try {
     const t0  = performance.now();
+    const options = { temperature: 0.7 };
+    if (state.nextAutomation) {
+      options.automation = state.nextAutomation;
+      state.nextAutomation = null;
+    }
     const res = await fetch(`${API_BASE}/api/chat`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: msg, history: state.history.slice(-MAX_HISTORY), options: { temperature: 0.7 } }),
+      body: JSON.stringify({ message: msg, history: state.history.slice(-MAX_HISTORY), options }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Erro na API");
@@ -1068,16 +1074,6 @@ async function renderAutomationsPanel() {
       const askDisabled = connected ? "" : "disabled";
       const daily       = dailyMap[a.name] || [];
       const historyHtml = buildRunDots(historyMap[a.name], daily);
-      const runs        = historyMap[a.name] || [];
-      // Taxa de sucesso: prioriza runs com runId; fallback usa eventos diários
-      let successRate = null;
-      if (runs.length) {
-        successRate = Math.round(runs.filter(r => !r.hasError).length / runs.length * 100);
-      } else if (daily.length) {
-        const tot = daily.reduce((s, d) => s + d.total, 0);
-        const err = daily.reduce((s, d) => s + d.errors, 0);
-        if (tot > 0) successRate = Math.round((tot - err) / tot * 100);
-      }
 
       return `<div class="ap-card ${statusClass === "overdue" ? "ap-card--overdue" : ""}" data-status="${statusClass}">
         <div class="ap-card-head">
@@ -1090,13 +1086,9 @@ async function renderAutomationsPanel() {
             <span class="ap-row-label">TEMPO DECORRIDO</span>
             <span class="ap-row-val ${statusClass === "overdue" ? "danger" : ""}">${elapsed}</span>
           </div>
-          <div class="ap-row">
-            <span class="ap-row-label">TAXA SUCESSO</span>
-            <span class="ap-row-val ${successRate !== null && successRate < 70 ? "danger" : ""}">${successRate !== null ? successRate + "% OK" : "—"}</span>
-          </div>
         </div>
         ${historyHtml}
-        <button class="ap-ask-btn" data-name="${a.displayName}" ${askDisabled}>
+        <button class="ap-ask-btn" data-name="${a.displayName}" data-id="${a.name}" ${askDisabled}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           DIAGNOSTICAR
         </button>
@@ -1106,11 +1098,13 @@ async function renderAutomationsPanel() {
     grid.querySelectorAll(".ap-ask-btn:not([disabled])").forEach(btn => {
       btn.addEventListener("click", () => {
         const name = btn.getAttribute("data-name");
+        const id   = btn.getAttribute("data-id");
         showChat();
         const input = DOM.messageInput();
         if (input) {
           input.value = `Diagnostique a automação ${name}: status da última execução, horário, duração e erros encontrados.`;
           input.dispatchEvent(new Event("input"));
+          state.nextAutomation = id;
           sendMessage();
         }
       });
@@ -1154,15 +1148,6 @@ async function renderDatasourcesPanel() {
       const askDisabled = a.connected ? "" : "disabled";
       const daily2      = dailyMap[a.name] || [];
       const historyHtml = buildRunDots(historyMap[a.name], daily2);
-      const runs        = historyMap[a.name] || [];
-      let successRate   = null;
-      if (runs.length) {
-        successRate = Math.round(runs.filter(r => !r.hasError).length / runs.length * 100);
-      } else if (daily2.length) {
-        const tot = daily2.reduce((s, d) => s + d.total, 0);
-        const err = daily2.reduce((s, d) => s + d.errors, 0);
-        if (tot > 0) successRate = Math.round((tot - err) / tot * 100);
-      }
       return `<div class="ap-card ${statusClass === "overdue" ? "ap-card--overdue" : ""}" data-status="${statusClass}">
         <div class="ap-card-head">
           <span class="ap-dot ${statusClass}"></span>
@@ -1171,10 +1156,9 @@ async function renderDatasourcesPanel() {
         </div>
         <div class="ap-rows">
           <div class="ap-row"><span class="ap-row-label">TEMPO DECORRIDO</span><span class="ap-row-val ${statusClass === "overdue" ? "danger" : ""}">${elapsed}</span></div>
-          <div class="ap-row"><span class="ap-row-label">TAXA SUCESSO</span><span class="ap-row-val ${successRate !== null && successRate < 70 ? "danger" : ""}">${successRate !== null ? successRate + "% OK" : "—"}</span></div>
         </div>
         ${historyHtml}
-        <button class="ap-ask-btn" data-name="${a.displayName}" ${askDisabled}>
+        <button class="ap-ask-btn" data-name="${a.displayName}" data-id="${a.name}" ${askDisabled}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           DIAGNOSTICAR
         </button>
@@ -1184,11 +1168,13 @@ async function renderDatasourcesPanel() {
     grid.querySelectorAll(".ap-ask-btn:not([disabled])").forEach(btn => {
       btn.addEventListener("click", () => {
         const name = btn.getAttribute("data-name");
+        const id   = btn.getAttribute("data-id");
         showChat();
         const input = DOM.messageInput();
         if (input) {
           input.value = `Diagnostique ${name}: status da última atualização, horário, duração e erros encontrados.`;
           input.dispatchEvent(new Event("input"));
+          state.nextAutomation = id;
           sendMessage();
         }
       });

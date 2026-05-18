@@ -95,7 +95,10 @@ async function processMessage(userMessage, conversationHistory = [], options = {
 
   if (ingestEnabled) {
     try {
-      const ingestContext = await getIngestPromptContext(userMessage);
+      const automationHint = typeof options.automation === "string" && options.automation.trim()
+        ? options.automation.trim()
+        : null;
+      const ingestContext = await getIngestPromptContext(userMessage, automationHint);
       if (ingestContext && ingestContext.files > 0) {
         logContext = ingestContext;
       }

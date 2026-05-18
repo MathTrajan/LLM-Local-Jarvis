@@ -56,7 +56,16 @@ function normalizeEvent(raw = {}) {
 
 function expandPayloadToEvents(payload) {
   if (!payload || typeof payload !== "object") return [];
-  if (Array.isArray(payload.events)) return payload.events;
+  if (Array.isArray(payload.events)) {
+    // Herda campos do pai nos eventos filhos quando ausentes
+    return payload.events.map(ev => ({
+      automation: payload.automation || payload.source,
+      runId:      payload.runId,
+      tags:       payload.tags,
+      meta:       payload.meta,
+      ...ev,
+    }));
+  }
   if (typeof payload.text === "string" && payload.text.trim()) {
     const lines = payload.text
       .split(/\r?\n/)
@@ -480,11 +489,12 @@ function buildHistoryContext(history, stats) {
   return lines.join("\n");
 }
 
-async function getPromptContext(userMessage) {
+async function getPromptContext(userMessage, automationHint = null) {
   const maxEvents = Math.max(1, getEnvInt("LOG_INGEST_MAX_CONTEXT_EVENTS", 60));
   const search = userMessage && userMessage.length > 4 ? userMessage : null;
   const recentEvents = await queryEvents({ limit: Math.max(maxEvents * 3, 120) });
-  const detectedAutomation = detectAutomationFromEvents(userMessage, recentEvents);
+  // Quando o front passa a automação explicitamente (botão DIAGNOSTICAR), pula a detecção por texto
+  const detectedAutomation = automationHint || detectAutomationFromEvents(userMessage, recentEvents);
 
   let events = [];
   if (detectedAutomation) {
