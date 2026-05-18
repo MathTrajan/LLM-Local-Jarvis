@@ -435,9 +435,32 @@ async function queryEvents(options = {}) {
   return rows.map(rowToEvent);
 }
 
+// Formata ISO timestamp em horario BRT legivel (dd/MM HH:mm:ss). Evita o LLM tentar converter UTC.
+function formatBrt(iso) {
+  if (!iso) return "?";
+  try {
+    return new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+  } catch (_) {
+    return String(iso);
+  }
+}
+
+// Converte minutos decimais (ex: 1.8) em "1min 48s" / "1h 30min" / "45s"
+function formatDuration(minutes) {
+  if (minutes == null || !isFinite(minutes)) return null;
+  const totalSeconds = Math.max(0, Math.round(minutes * 60));
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  if (h > 0) return `${h}h ${m}min`;
+  if (m > 0) return s > 0 ? `${m}min ${s}s` : `${m}min`;
+  return `${s}s`;
+}
+
 function buildContextFromEvents(events, focusAutomation = null) {
   const lines = [];
   lines.push(`FONTE PRIMARIA: LOGS EM TEMPO REAL (BANCO ${getStorageMode().toUpperCase()})`);
+  lines.push("Todos os horarios abaixo ja estao em America/Sao_Paulo (BRT, UTC-3). NAO converta.");
   lines.push("Use esses eventos como verdade principal para automacoes, erros, execucoes e status.");
   lines.push("Se faltar evidencia nesses eventos, declare claramente.");
   if (focusAutomation) {
@@ -454,7 +477,7 @@ function buildContextFromEvents(events, focusAutomation = null) {
       details.push(`tags=${event.tags.join("|")}`);
     }
     const detailSuffix = details.length > 0 ? ` | ${details.join(" | ")}` : "";
-    lines.push(`[${event.timestamp}] [${event.level}] [${event.automation}] ${event.message}${detailSuffix}`);
+    lines.push(`[${formatBrt(event.timestamp)} BRT] [${event.level}] [${event.automation}] ${event.message}${detailSuffix}`);
   }
 
   return lines.join("\n");
@@ -463,12 +486,10 @@ function buildContextFromEvents(events, focusAutomation = null) {
 function buildHistoryContext(history, stats) {
   if (!history || history.length === 0) return "";
   const lines = [];
-  lines.push(`\nHISTÓRICO DE EXECUÇÕES (últimas ${history.length}):`);
+  lines.push(`\nHISTÓRICO DE EXECUÇÕES (últimas ${history.length}) — horários em BRT:`);
   for (const run of history) {
-    const dt = run.startTs
-      ? new Date(run.startTs).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })
-      : "?";
-    const dur = run.durationMinutes != null ? `${run.durationMinutes}min` : "duração indisponível";
+    const dt = formatBrt(run.startTs);
+    const dur = formatDuration(run.durationMinutes) || "duração indisponível";
     const st = run.hasError ? "FALHA" : run.succeeded ? "sucesso" : "incompleto";
     lines.push(`  ${dt} | duração: ${dur} | ${st} | eventos: ${run.eventCount}`);
   }
@@ -481,9 +502,10 @@ function buildHistoryContext(history, stats) {
       `\nESTATÍSTICAS (${stats.daysBack} dias): ${stats.totalRuns} execuções | ${stats.failedRuns} falhas | sucesso: ${successRate ?? "?"}%`
     );
     if (stats.avgDurationMinutes != null) {
-      lines.push(
-        `  Duração: média ${stats.avgDurationMinutes}min | mín ${stats.minDurationMinutes}min | máx ${stats.maxDurationMinutes}min`
-      );
+      const avg = formatDuration(stats.avgDurationMinutes);
+      const min = formatDuration(stats.minDurationMinutes);
+      const max = formatDuration(stats.maxDurationMinutes);
+      lines.push(`  Duração: média ${avg} | mín ${min} | máx ${max}`);
     }
   }
   return lines.join("\n");

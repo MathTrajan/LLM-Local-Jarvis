@@ -1,8 +1,10 @@
 const { getLastEventForAutomation } = require("./log-ingest-store");
 const { getEnvInt } = require("./config");
 
-// Brazil: UTC-3, sem horario de verao desde 2019
-const TZ_OFFSET_MS = -3 * 60 * 60 * 1000;
+// Brasil: UTC-3, sem horario de verao desde 2019.
+// IMPORTANTE: tudo aqui usa metodos UTC para nao depender do timezone do runtime
+// (Vercel roda em UTC, Windows local em BRT — antes davam horarios diferentes).
+const BRT_OFFSET_HOURS = -3;
 const OVERDUE_HOURS = getEnvInt("MONITOR_OVERDUE_HOURS", 5);
 
 // Gera lista de horários a partir de um horário inicial com intervalo fixo
@@ -77,23 +79,20 @@ const DATA_SOURCES = [
     schedule: { type: "daily",    times: ["07:30", "12:00", "15:30", "19:00"] } },
 ];
 
-function toLocal(utcDate) {
-  return new Date(utcDate.getTime() + TZ_OFFSET_MS);
-}
-
 function getLastExpectedRun(schedule, nowUtc) {
-  const nowLocal = toLocal(nowUtc);
+  // brtNow: shift do UTC para que getUTC* devolva componentes da data BRT
+  const brtNow = new Date(nowUtc.getTime() + BRT_OFFSET_HOURS * 60 * 60 * 1000);
   const candidates = [];
 
-  // Mensais: até 31 dias; dias específicos da semana: até 7 (ex: sex→seg); resto: 1
+  // Mensais: ate 31 dias; dias especificos da semana: ate 7 (ex: sex->seg); resto: 1
   const maxDaysBack = schedule.type === "monthly" ? 31 : schedule.type === "specific_weekdays" ? 7 : 1;
 
   for (let offset = 0; offset <= maxDaysBack; offset++) {
-    const day = new Date(nowLocal);
-    day.setDate(day.getDate() - offset);
+    const day = new Date(brtNow);
+    day.setUTCDate(brtNow.getUTCDate() - offset);
 
-    const dow = day.getDay();
-    const dom = day.getDate();
+    const dow = day.getUTCDay();
+    const dom = day.getUTCDate();
 
     let runs = false;
     if (schedule.type === "daily")             runs = true;
@@ -104,13 +103,17 @@ function getLastExpectedRun(schedule, nowUtc) {
 
     for (const timeStr of schedule.times) {
       const [h, m] = timeStr.split(":").map(Number);
-      const scheduledLocal = new Date(day);
-      scheduledLocal.setHours(h, m, 0, 0);
-      const scheduledUtc = new Date(scheduledLocal.getTime() - TZ_OFFSET_MS);
+      // h:m em BRT == (h - BRT_OFFSET) em UTC. Date.UTC normaliza overflow.
+      const scheduledUtc = new Date(Date.UTC(
+        day.getUTCFullYear(),
+        day.getUTCMonth(),
+        day.getUTCDate(),
+        h - BRT_OFFSET_HOURS, m, 0, 0
+      ));
       if (scheduledUtc <= nowUtc) candidates.push(scheduledUtc);
     }
 
-    // Para mensais: achou o dia mais recente, não precisa continuar
+    // Para mensais: achou o dia mais recente, nao precisa continuar
     if (schedule.type === "monthly" && candidates.length > 0) break;
   }
 
