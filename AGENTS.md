@@ -83,7 +83,6 @@ curl https://jarvis-observability.vercel.app/api/monitor
 
 ## 7. Anomalias conhecidas (não "corrija" achando que é bug)
 
-- `jarvis-chat-export/backend/public/log-ingest-store.js` — duplicata legacy (Node code em diretório de assets estáticos); referência ainda usa `pg` mas o arquivo não é importado por ninguém. Pode remover.
 - `openai ^6.32.0` em `package.json` — dependência sem uso no código. Pode remover.
 
 ## 8. Não faça

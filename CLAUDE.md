@@ -43,7 +43,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Cache monitor 30s → 5min; polling front 30s → 2min com pausa em hidden
 
 ### Anomalias detectadas
-- `backend/public/log-ingest-store.js` — código Node.js em diretório de assets estáticos (ainda usa `pg`, fora de uso) — remover
 - `openai ^6.32.0` em package.json — dependência sem uso no código — remover
 
 ## Comandos
