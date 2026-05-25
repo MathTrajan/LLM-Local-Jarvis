@@ -128,7 +128,11 @@ function getSql() {
   if (!POSTGRES_URL) return null;
   if (neonSql) return neonSql;
   // fullResults: true devolve { rows, rowCount } como o driver pg classico.
-  neonSql = neon(POSTGRES_URL, { fullResults: true });
+  // O neon() devolve uma funcao tagged-template; expomos .query(text, params)
+  // como acucar pra preservar a API igual ao pg.
+  const sqlFn = neon(POSTGRES_URL, { fullResults: true });
+  sqlFn.query = (text, params) => sqlFn(text, params);
+  neonSql = sqlFn;
   return neonSql;
 }
 
