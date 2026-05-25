@@ -83,7 +83,7 @@ curl https://jarvis-observability.vercel.app/api/monitor
 
 ## 7. Anomalias conhecidas (não "corrija" achando que é bug)
 
-- `openai ^6.32.0` em `package.json` — dependência sem uso no código. Pode remover.
+Nenhuma anomalia ativa no momento.
 
 ## 8. Não faça
 

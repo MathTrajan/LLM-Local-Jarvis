@@ -15,8 +15,7 @@
     "express-rate-limit": "^7.1.5",
     "googleapis": "^144.0.0",
     "groq-sdk": "^1.1.1",
-    "helmet": "^7.1.0",
-    "openai": "^6.32.0"
+    "helmet": "^7.1.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.3"

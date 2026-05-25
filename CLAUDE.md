@@ -43,7 +43,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Cache monitor 30s → 5min; polling front 30s → 2min com pausa em hidden
 
 ### Anomalias detectadas
-- `openai ^6.32.0` em package.json — dependência sem uso no código — remover
+Nenhuma anomalia ativa.
 
 ## Comandos
 
