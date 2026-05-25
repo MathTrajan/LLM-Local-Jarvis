@@ -4,34 +4,47 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Contexto do Projeto
 
-> Gerado por /mapa em 2026-05-14. Grafo: `G:\Meu Drive\Obsidian Vault\Graphify\Jarvis\graphify-out\Jarvis - Grafo.md` · 34 arquivos · 231 nós · 365 arestas · 51 comunidades
+> Gerado por /mapa em 2026-05-25. Vault: `G:\Meu Drive\Obsidian Vault\Graphify\Jarvis\` · 36 arquivos · 37 nós · 49 arestas · 9 comunidades
 
-### Núcleo do sistema (god nodes)
-- `getEnvString()` — 12 conexões — ponto único de acesso a env vars em todos os módulos Node.js
-- `loadLogsFromSource()` — 11 conexões — hub de carregamento de logs (Google Drive + local)
-- `init()` — 10 conexões — inicialização do banco de dados (SQLite/Postgres)
-- `refreshSystemStatus()` — 9 conexões — frontend polling que atualiza monitor + status
-- `sendMessage()` — 9 conexões — ponto de entrada do chat no frontend
+**Para qualquer dúvida arquitetural, leia primeiro `_index.md` e o hub da comunidade relevante antes de explorar nodes/.**
 
-### Comunidades principais
-| ID | Nome | Tamanho |
-|---|---|---|
-| C0 | Frontend UI + Chat App | 37 nós |
-| C1 | Log Ingest Store + DB Query | 23 nós |
-| C2 | Config + Env Management | 22 nós |
-| C3 | Monitor + Server Core | 10 nós |
-| C4 | Agent LLM + Response | 9 nós |
-| C5 | Agent Error Handling | 8 nós |
-| C6 | Legacy Acompanhamento Meta | 7 nós |
-| C7 | Legacy Prog Pedidos | 7 nós |
-| C8 | Legacy Saldo Cotia | 7 nós |
-| C9 | Groq LLM Provider | 6 nós |
-| C10-C18 | Automações PS1 individuais (Curva A, Estoque, Matriz, Orçam, Pedidos, Prog, Reposição) | 6 nós cada |
+### Ponto de entrada
+`G:\Meu Drive\Obsidian Vault\Graphify\Jarvis\_index.md`
 
-### Conexões não óbvias
-- `processMessage()` chama `getEnvString()` e `getEnvBoolean()` via `config.js` — acoplamento indireto ao config em todo fluxo LLM
-- `runLogCleanup()` também acessa `getEnvString()` — limpeza de logs depende de config centralizado
-- `getEnvString()` é ponto de falha único: qualquer env var ausente quebra agent, server e log-ingest simultaneamente
+### God nodes (núcleo — ausência quebra o sistema)
+- `log-ingest-store` — 10 conexões — persistência dual SQLite/Neon HTTP + contexto LLM primário
+- `config` — 9 conexões — acesso a env vars, importado por todos os módulos
+- `getEnvString` — 9 conexões — env var ausente sem fallback quebra silenciosamente
+- `ensurePostgres` — 8 conexões — lazy init Neon + 5 índices, chamado por toda I/O
+- `server` — 8 conexões — entry point Express, orquestra todos os módulos
+- `agent` — 7 conexões — hub LLM: contexto + roteamento + resposta
+- `monitor` — 7 conexões — avalia 13 automações em 1 query batch
+- `getPromptContext` — 6 conexões — monta contexto primário: detecta automação + busca eventos
+- `queryEvents` — 6 conexões — consultada 3x em getPromptContext + monitor + API
+- `log-context` — 5 conexões — fallback Drive/local quando banco está vazio
+
+### Comunidades
+| Hub | Nós | Papel |
+|-----|-----|-------|
+| C0 Log Ingest Store | 8 | Persistência Neon HTTP + contexto LLM |
+| C1 Frontend UI | 2 | SPA chat + monitor (polling 2min, pausa em hidden) |
+| C2 Monitor + Server Core | 6 | Express + monitor batch + cache 5min |
+| C3 Server Endpoints | 7 | 7 endpoints REST |
+| C4 Agent LLM | 2 | Orquestra LLM |
+| C5 Groq Provider | 2 | Groq 3-key cascade |
+| C6 Config + Env | 4 | Env vars centralizadas |
+| C7 Log Context | 2 | Fallback Drive/local |
+| C8 Telegram Alertas | 2 | Alertas overdue |
+
+### Mudanças desde último mapeamento (2026-05-15)
+- Driver Postgres: `pg.Pool` → `@neondatabase/serverless` (HTTP, scale-to-zero)
+- Nova função batch `getLastEventsForAutomations` substitui 13 queries do monitor por 1
+- Lógica overdue revista: usa último evento real (anti-deslizamento de horários)
+- Cache monitor 30s → 5min; polling front 30s → 2min com pausa em hidden
+
+### Anomalias detectadas
+- `backend/public/log-ingest-store.js` — código Node.js em diretório de assets estáticos (ainda usa `pg`, fora de uso) — remover
+- `openai ^6.32.0` em package.json — dependência sem uso no código — remover
 
 ## Comandos
 
@@ -94,9 +107,9 @@ Servido como static files pelo próprio Express. Resolução:
 
 **`frontend/` é a fonte de trabalho visual.** Após edições, espelhar manualmente para `backend/public/`. O frontend faz polling a cada 30s chamando `refreshSystemStatus()` + `refreshMonitor()`.
 
-### Groq com duas chaves
+### Groq com três chaves
 
-`providers/groq.js` tenta `GROQ_API_KEY_1` + `GROQ_MODEL_1` primeiro, depois `GROQ_API_KEY_2` + `GROQ_MODEL_2` como fallback automático.
+`providers/groq.js` tenta `GROQ_API_KEY_1` + `GROQ_MODEL_1` primeiro, depois `GROQ_API_KEY_2` e `GROQ_API_KEY_3` como fallback automático em cascata.
 
 ## Variáveis de ambiente críticas
 
