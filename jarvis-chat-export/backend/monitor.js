@@ -133,16 +133,26 @@ function evaluateItemsWithLastEvents(items, nowUtc, lastEventsByName) {
       return { name: auto.name, displayName: auto.displayName, connected: true, status: "not_scheduled", lastExpectedRun: null, lastEventAt: null, hoursElapsed: null };
     }
 
-    const hoursElapsed = (nowUtc - lastExpectedUtc) / (1000 * 60 * 60);
-    const candidate = lastEventsByName[auto.name.toLowerCase()] || null;
-    // O batch traz eventos desde o cutoff global (min de todos os lastExpectedUtc),
-    // entao re-checamos aqui se o evento e realmente >= lastExpectedUtc desta automacao.
-    const lastEvent = candidate && new Date(candidate.timestamp) >= lastExpectedUtc ? candidate : null;
+    const lastEvent = lastEventsByName[auto.name.toLowerCase()] || null;
+    const lastEventTime = lastEvent ? new Date(lastEvent.timestamp) : null;
+    // hoursElapsed agora reflete "ha quanto tempo a automacao nao envia evento"
+    // (antes media "ha quanto tempo passou do horario programado"), o que reseta
+    // toda vez que um novo horario do dia passa. Sem evento conhecido = Infinity.
+    const hoursElapsed = lastEventTime
+      ? (nowUtc - lastEventTime) / (1000 * 60 * 60)
+      : Infinity;
 
     let status;
-    if (lastEvent)                          status = "ok";
-    else if (hoursElapsed >= OVERDUE_HOURS) status = "overdue";
-    else                                    status = "pending";
+    if (lastEventTime && lastEventTime >= lastExpectedUtc) {
+      // Houve evento desde o ultimo horario programado: ok.
+      status = "ok";
+    } else if (hoursElapsed >= OVERDUE_HOURS) {
+      // Sem evento desde o ultimo horario E ja passou OVERDUE_HOURS sem nenhum
+      // evento real (cobre o caso de varios horarios consecutivos pulados).
+      status = "overdue";
+    } else {
+      status = "pending";
+    }
 
     return {
       name: auto.name,
@@ -151,29 +161,26 @@ function evaluateItemsWithLastEvents(items, nowUtc, lastEventsByName) {
       status,
       lastExpectedRun: lastExpectedUtc.toISOString(),
       lastEventAt: lastEvent?.timestamp || null,
-      hoursElapsed: Number(hoursElapsed.toFixed(1)),
+      hoursElapsed: Number.isFinite(hoursElapsed) ? Number(hoursElapsed.toFixed(1)) : null,
     };
   });
 }
 
+// Cutoff fixo de 30 dias para a busca batch: permite enxergar o ultimo evento
+// real de automacoes raras (mensais) ou paradas ha dias. Custo desprezivel
+// com o indice (LOWER(automation), timestamp DESC).
+const LOOKBACK_DAYS = 30;
+
 async function getMonitorStatus() {
   const nowUtc = new Date();
   const allItems = [...AUTOMATIONS, ...DATA_SOURCES];
-
-  // Calcula lastExpectedRun de todos os conectados pra achar o cutoff global mais antigo.
-  const expected = allItems
-    .filter((a) => a.connected)
-    .map((a) => ({ name: a.name, exp: getLastExpectedRun(a.schedule, nowUtc) }))
-    .filter((x) => x.exp);
+  const connectedNames = allItems.filter((a) => a.connected).map((a) => a.name);
 
   let lastEventsByName = {};
-  if (expected.length > 0) {
-    const earliestCutoff = new Date(Math.min(...expected.map((x) => x.exp.getTime())));
+  if (connectedNames.length > 0) {
+    const cutoff = new Date(nowUtc.getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
     // UMA unica query Postgres para todas as automacoes conectadas.
-    lastEventsByName = await getLastEventsForAutomations(
-      expected.map((x) => x.name),
-      earliestCutoff
-    );
+    lastEventsByName = await getLastEventsForAutomations(connectedNames, cutoff);
   }
 
   const automations = evaluateItemsWithLastEvents(AUTOMATIONS, nowUtc, lastEventsByName);
