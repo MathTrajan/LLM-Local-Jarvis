@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const { Pool } = require("pg");
+const { neon } = require("@neondatabase/serverless");
 const { getEnvString, getEnvBoolean, getEnvInt } = require("./config");
 
 const DATA_DIR = path.join(__dirname, "data");
@@ -10,7 +10,7 @@ const DEFAULT_QUERY_LIMIT = 50;
 const POSTGRES_URL = getEnvString("DATABASE_URL") || getEnvString("POSTGRES_URL");
 
 let sqliteDb = null;
-let pgPool = null;
+let neonSql = null;
 let pgReady = false;
 let DatabaseSync = null;
 
@@ -122,24 +122,21 @@ function ensureSqlite() {
   return sqliteDb;
 }
 
-function getPool() {
+// Driver HTTP do Neon: cada query e uma chamada HTTP isolada, sem conexao TCP persistente.
+// Permite a Neon fazer scale-to-zero entre queries, reduzindo CU drasticamente.
+function getSql() {
   if (!POSTGRES_URL) return null;
-  if (pgPool) return pgPool;
-
-  pgPool = new Pool({
-    connectionString: POSTGRES_URL,
-    ssl: POSTGRES_URL.includes("localhost") ? false : { rejectUnauthorized: false },
-    max: 5,
-  });
-
-  return pgPool;
+  if (neonSql) return neonSql;
+  // fullResults: true devolve { rows, rowCount } como o driver pg classico.
+  neonSql = neon(POSTGRES_URL, { fullResults: true });
+  return neonSql;
 }
 
 async function ensurePostgres() {
   if (!POSTGRES_URL || pgReady) return;
 
-  const pool = getPool();
-  await pool.query(`
+  const sql = getSql();
+  await sql.query(`
     CREATE TABLE IF NOT EXISTS log_events (
       id BIGSERIAL PRIMARY KEY,
       event_id TEXT NOT NULL,
@@ -155,10 +152,11 @@ async function ensurePostgres() {
       received_at TIMESTAMPTZ NOT NULL
     )
   `);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_log_events_timestamp ON log_events(timestamp DESC)`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_log_events_level ON log_events(level)`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_log_events_automation ON log_events(automation)`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_log_events_received_at ON log_events(received_at DESC)`);
+  await sql.query(`CREATE INDEX IF NOT EXISTS idx_log_events_timestamp ON log_events(timestamp DESC)`);
+  await sql.query(`CREATE INDEX IF NOT EXISTS idx_log_events_level ON log_events(level)`);
+  await sql.query(`CREATE INDEX IF NOT EXISTS idx_log_events_automation ON log_events(automation)`);
+  await sql.query(`CREATE INDEX IF NOT EXISTS idx_log_events_received_at ON log_events(received_at DESC)`);
+  await sql.query(`CREATE INDEX IF NOT EXISTS idx_log_events_automation_ts ON log_events(LOWER(automation), timestamp DESC)`);
 
   pgReady = true;
 }
@@ -252,40 +250,38 @@ async function appendEvents(payload) {
 
   if (POSTGRES_URL) {
     await ensurePostgres();
-    const pool = getPool();
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
-      for (const e of normalized) {
-        await client.query(
-          `
-            INSERT INTO log_events (
-              event_id, timestamp, level, automation, message,
-              tags_json, run_id, status, error_code, meta_json, received_at
-            )
-            VALUES ($1, $2::timestamptz, $3, $4, $5, $6::jsonb, $7, $8, $9, $10::jsonb, $11::timestamptz)
-          `,
-          [
-            e.eventId,
-            e.timestamp,
-            e.level,
-            e.automation,
-            e.message,
-            JSON.stringify(e.tags || []),
-            e.runId,
-            e.status,
-            e.errorCode,
-            JSON.stringify(e.meta || {}),
-            e.receivedAt,
-          ]
+    const sql = getSql();
+    // Multi-row INSERT em UMA chamada HTTP (atomico por ser single statement).
+    // Chunks de 200 para nao estourar limite de params do Postgres (65535).
+    const CHUNK = 200;
+    for (let i = 0; i < normalized.length; i += CHUNK) {
+      const chunk = normalized.slice(i, i + CHUNK);
+      const params = [];
+      const placeholders = chunk.map((e) => {
+        const base = params.length;
+        params.push(
+          e.eventId,
+          e.timestamp,
+          e.level,
+          e.automation,
+          e.message,
+          JSON.stringify(e.tags || []),
+          e.runId,
+          e.status,
+          e.errorCode,
+          JSON.stringify(e.meta || {}),
+          e.receivedAt
         );
-      }
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
+        return `($${base + 1}, $${base + 2}::timestamptz, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}::jsonb, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}::jsonb, $${base + 11}::timestamptz)`;
+      }).join(", ");
+
+      await sql.query(
+        `INSERT INTO log_events (
+          event_id, timestamp, level, automation, message,
+          tags_json, run_id, status, error_code, meta_json, received_at
+        ) VALUES ${placeholders}`,
+        params
+      );
     }
 
     return { accepted: normalized.length, rejected: Math.max(0, rawEvents.length - normalized.length) };
@@ -423,9 +419,9 @@ function buildPostgresQuery(options = {}) {
 async function queryEvents(options = {}) {
   if (POSTGRES_URL) {
     await ensurePostgres();
-    const pool = getPool();
-    const { sql, values } = buildPostgresQuery(options);
-    const result = await pool.query(sql, values);
+    const sql = getSql();
+    const { sql: text, values } = buildPostgresQuery(options);
+    const result = await sql.query(text, values);
     return result.rows.map(rowToEvent);
   }
 
@@ -561,15 +557,19 @@ async function getPromptContext(userMessage, automationHint = null) {
 async function getStats() {
   if (POSTGRES_URL) {
     await ensurePostgres();
-    const pool = getPool();
-    const recent = await pool.query("SELECT timestamp FROM log_events ORDER BY timestamp DESC LIMIT 1");
-    const count = await pool.query("SELECT COUNT(*)::bigint AS total FROM log_events");
-
+    const sql = getSql();
+    // 1 query so: ultimo evento + estimativa de total via pg_class.reltuples (barato, sem scan).
+    const result = await sql.query(`
+      SELECT
+        (SELECT timestamp FROM log_events ORDER BY timestamp DESC LIMIT 1) AS last_ts,
+        (SELECT reltuples::bigint FROM pg_class WHERE relname = 'log_events') AS total
+    `);
+    const row = result.rows[0] || {};
     return {
       enabled: getEnvBoolean("LOG_INGEST_ENABLED", true),
       dataFile: "postgres",
-      lastEventAt: recent.rows[0]?.timestamp?.toISOString?.() || recent.rows[0]?.timestamp || null,
-      totalEvents: Number(count.rows[0]?.total || 0),
+      lastEventAt: row.last_ts instanceof Date ? row.last_ts.toISOString() : (row.last_ts || null),
+      totalEvents: Number(row.total || 0),
     };
   }
 
@@ -590,8 +590,8 @@ async function getLastEventForAutomation(automationName, afterTimestamp) {
 
   if (POSTGRES_URL) {
     await ensurePostgres();
-    const pool = getPool();
-    const result = await pool.query(
+    const sql = getSql();
+    const result = await sql.query(
       `SELECT * FROM log_events WHERE LOWER(automation) = LOWER($1) AND timestamp >= $2::timestamptz ORDER BY timestamp DESC LIMIT 1`,
       [automationName, afterIso]
     );
@@ -605,13 +605,57 @@ async function getLastEventForAutomation(automationName, afterTimestamp) {
   return row ? rowToEvent(row) : null;
 }
 
+// Retorna o ultimo evento por automacao, em UMA unica query, restrito a uma lista
+// de nomes e a um cutoff global. Substitui N chamadas de getLastEventForAutomation.
+async function getLastEventsForAutomations(automationNames, sinceTimestamp) {
+  const names = Array.from(new Set((automationNames || []).filter(Boolean)));
+  if (names.length === 0) return {};
+  const sinceIso = sinceTimestamp instanceof Date ? sinceTimestamp.toISOString() : sinceTimestamp;
+
+  if (POSTGRES_URL) {
+    await ensurePostgres();
+    const sql = getSql();
+    const lowered = names.map((n) => String(n).toLowerCase());
+    const result = await sql.query(
+      `SELECT DISTINCT ON (LOWER(automation)) *
+       FROM log_events
+       WHERE LOWER(automation) = ANY($1::text[])
+         AND timestamp >= $2::timestamptz
+       ORDER BY LOWER(automation), timestamp DESC`,
+      [lowered, sinceIso]
+    );
+    const byName = {};
+    for (const row of result.rows) {
+      byName[String(row.automation).toLowerCase()] = rowToEvent(row);
+    }
+    return byName;
+  }
+
+  const db = ensureSqlite();
+  const placeholders = names.map(() => "LOWER(?)").join(",");
+  const rows = db
+    .prepare(
+      `SELECT * FROM log_events
+       WHERE LOWER(automation) IN (${placeholders})
+         AND timestamp >= ?
+       ORDER BY timestamp DESC`
+    )
+    .all(...names, sinceIso);
+  const byName = {};
+  for (const row of rows) {
+    const key = String(row.automation).toLowerCase();
+    if (!byName[key]) byName[key] = rowToEvent(row);
+  }
+  return byName;
+}
+
 async function deleteOldEvents(daysOld = 30) {
   const cutoff = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000).toISOString();
 
   if (POSTGRES_URL) {
     await ensurePostgres();
-    const pool = getPool();
-    const result = await pool.query(
+    const sql = getSql();
+    const result = await sql.query(
       `DELETE FROM log_events WHERE timestamp < $1::timestamptz`,
       [cutoff]
     );
@@ -629,8 +673,8 @@ async function getAutomationHistory(automationName, limit = 7) {
 
   if (POSTGRES_URL) {
     await ensurePostgres();
-    const pool = getPool();
-    const result = await pool.query(
+    const sql = getSql();
+    const result = await sql.query(
       `SELECT run_id,
               MIN(timestamp) AS start_ts,
               MAX(timestamp) AS end_ts,
@@ -689,8 +733,8 @@ async function getRunStats(automationName, daysBack = 30) {
 
   if (POSTGRES_URL) {
     await ensurePostgres();
-    const pool = getPool();
-    const result = await pool.query(
+    const sql = getSql();
+    const result = await sql.query(
       `SELECT COUNT(DISTINCT run_id) AS total_runs,
               ROUND(AVG(EXTRACT(EPOCH FROM (max_ts - min_ts)) / 60)::numeric, 1) AS avg_dur,
               ROUND(MIN(EXTRACT(EPOCH FROM (max_ts - min_ts)) / 60)::numeric, 1) AS min_dur,
@@ -754,8 +798,8 @@ async function getDailyStats(automationName, days = 7) {
 
   if (POSTGRES_URL) {
     await ensurePostgres();
-    const pool = getPool();
-    const result = await pool.query(
+    const sql = getSql();
+    const result = await sql.query(
       `SELECT DATE(timestamp AT TIME ZONE 'America/Sao_Paulo') AS day,
               COUNT(*) AS total,
               SUM(CASE WHEN level = 'ERROR' THEN 1 ELSE 0 END) AS errors
@@ -790,6 +834,7 @@ module.exports = {
   getStats,
   getStorageMode,
   getLastEventForAutomation,
+  getLastEventsForAutomations,
   deleteOldEvents,
   getAutomationHistory,
   getRunStats,

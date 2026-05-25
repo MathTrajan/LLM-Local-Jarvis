@@ -1,4 +1,4 @@
-const { getLastEventForAutomation } = require("./log-ingest-store");
+const { getLastEventsForAutomations } = require("./log-ingest-store");
 const { getEnvInt } = require("./config");
 
 // Brasil: UTC-3, sem horario de verao desde 2019.
@@ -121,50 +121,68 @@ function getLastExpectedRun(schedule, nowUtc) {
   return candidates.sort((a, b) => b - a)[0];
 }
 
-async function evaluateItems(items, nowUtc) {
-  return Promise.all(
-    items.map(async (auto) => {
-      if (!auto.connected) {
-        return { name: auto.name, displayName: auto.displayName, connected: false, status: "not_connected", lastExpectedRun: null, lastEventAt: null, hoursElapsed: null };
-      }
+// Avalia itens reutilizando um mapa "ultimo evento por automacao" ja consultado em batch.
+function evaluateItemsWithLastEvents(items, nowUtc, lastEventsByName) {
+  return items.map((auto) => {
+    if (!auto.connected) {
+      return { name: auto.name, displayName: auto.displayName, connected: false, status: "not_connected", lastExpectedRun: null, lastEventAt: null, hoursElapsed: null };
+    }
 
-      const lastExpectedUtc = getLastExpectedRun(auto.schedule, nowUtc);
-      if (!lastExpectedUtc) {
-        return { name: auto.name, displayName: auto.displayName, connected: true, status: "not_scheduled", lastExpectedRun: null, lastEventAt: null, hoursElapsed: null };
-      }
+    const lastExpectedUtc = getLastExpectedRun(auto.schedule, nowUtc);
+    if (!lastExpectedUtc) {
+      return { name: auto.name, displayName: auto.displayName, connected: true, status: "not_scheduled", lastExpectedRun: null, lastEventAt: null, hoursElapsed: null };
+    }
 
-      const hoursElapsed = (nowUtc - lastExpectedUtc) / (1000 * 60 * 60);
-      const lastEvent = await getLastEventForAutomation(auto.name, lastExpectedUtc);
+    const hoursElapsed = (nowUtc - lastExpectedUtc) / (1000 * 60 * 60);
+    const candidate = lastEventsByName[auto.name.toLowerCase()] || null;
+    // O batch traz eventos desde o cutoff global (min de todos os lastExpectedUtc),
+    // entao re-checamos aqui se o evento e realmente >= lastExpectedUtc desta automacao.
+    const lastEvent = candidate && new Date(candidate.timestamp) >= lastExpectedUtc ? candidate : null;
 
-      let status;
-      if (lastEvent)                          status = "ok";
-      else if (hoursElapsed >= OVERDUE_HOURS) status = "overdue";
-      else                                    status = "pending";
+    let status;
+    if (lastEvent)                          status = "ok";
+    else if (hoursElapsed >= OVERDUE_HOURS) status = "overdue";
+    else                                    status = "pending";
 
-      return {
-        name: auto.name,
-        displayName: auto.displayName,
-        connected: true,
-        status,
-        lastExpectedRun: lastExpectedUtc.toISOString(),
-        lastEventAt: lastEvent?.timestamp || null,
-        hoursElapsed: Number(hoursElapsed.toFixed(1)),
-      };
-    })
-  );
+    return {
+      name: auto.name,
+      displayName: auto.displayName,
+      connected: true,
+      status,
+      lastExpectedRun: lastExpectedUtc.toISOString(),
+      lastEventAt: lastEvent?.timestamp || null,
+      hoursElapsed: Number(hoursElapsed.toFixed(1)),
+    };
+  });
 }
 
 async function getMonitorStatus() {
   const nowUtc = new Date();
-  const [automations, dataSources] = await Promise.all([
-    evaluateItems(AUTOMATIONS, nowUtc),
-    evaluateItems(DATA_SOURCES, nowUtc),
-  ]);
+  const allItems = [...AUTOMATIONS, ...DATA_SOURCES];
 
-  const allItems = [...automations, ...dataSources];
+  // Calcula lastExpectedRun de todos os conectados pra achar o cutoff global mais antigo.
+  const expected = allItems
+    .filter((a) => a.connected)
+    .map((a) => ({ name: a.name, exp: getLastExpectedRun(a.schedule, nowUtc) }))
+    .filter((x) => x.exp);
+
+  let lastEventsByName = {};
+  if (expected.length > 0) {
+    const earliestCutoff = new Date(Math.min(...expected.map((x) => x.exp.getTime())));
+    // UMA unica query Postgres para todas as automacoes conectadas.
+    lastEventsByName = await getLastEventsForAutomations(
+      expected.map((x) => x.name),
+      earliestCutoff
+    );
+  }
+
+  const automations = evaluateItemsWithLastEvents(AUTOMATIONS, nowUtc, lastEventsByName);
+  const dataSources = evaluateItemsWithLastEvents(DATA_SOURCES, nowUtc, lastEventsByName);
+
+  const merged = [...automations, ...dataSources];
   return {
     timestamp: nowUtc.toISOString(),
-    overdueCount: allItems.filter((r) => r.status === "overdue").length,
+    overdueCount: merged.filter((r) => r.status === "overdue").length,
     automations,
     dataSources,
   };

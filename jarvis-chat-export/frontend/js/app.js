@@ -1244,11 +1244,21 @@ function init() {
   refreshSystemStatus().catch(() => showToast("Não foi possível carregar o status operacional.", "error"));
   refreshMonitor().catch(() => {});
 
-  // Polling a cada 30s (monitor tem cache de 30s no servidor)
+  // Polling a cada 2min (monitor tem cache de 5min no servidor; reduz CU da Neon).
+  // Pausa quando a aba esta oculta para nao gastar CU com usuario inativo.
   setInterval(() => {
+    if (document.visibilityState === "hidden") return;
     refreshSystemStatus().catch(() => {});
     refreshMonitor().catch(() => {});
-  }, 30_000);
+  }, 120_000);
+
+  // Quando a aba volta a ficar visivel, refresca imediatamente.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      refreshSystemStatus().catch(() => {});
+      refreshMonitor().catch(() => {});
+    }
+  });
 
   initParticles();
   initAdvancedSphere();

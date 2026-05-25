@@ -16,10 +16,13 @@ const { sendTelegramMessage } = require("./telegram");
 
 const app = express();
 
-// Cache do monitor: recalcula no máximo a cada 30s
+// Cache do monitor: recalcula no maximo a cada 5min (era 30s).
+// O calculo agora faz 1 query Postgres (em vez de 13), entao a janela maior
+// elimina varios CU/hora sem perder reatividade pratica (front polla a cada 30s
+// mas todos batem no mesmo cache).
 let _monitorCache = null;
 let _monitorCacheAt = 0;
-const MONITOR_CACHE_TTL = 30_000;
+const MONITOR_CACHE_TTL = 5 * 60 * 1000;
 
 async function getCachedMonitorStatus(force = false) {
   const now = Date.now();
@@ -35,7 +38,8 @@ const _overdueNotified = new Set();
 
 async function checkAndNotifyOverdue() {
   try {
-    const status = await getCachedMonitorStatus(true);
+    // Reusa cache (era force=true). O TTL de 5min ja casa com o intervalo de checagem.
+    const status = await getCachedMonitorStatus(false);
     const all = [...(status.automations || []), ...(status.dataSources || [])];
     for (const item of all) {
       if (item.status === "overdue" && !_overdueNotified.has(item.name)) {
