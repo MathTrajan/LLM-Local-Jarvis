@@ -1,6 +1,6 @@
 # AGENTS.md — Instruções para agentes de IA (Codex, Gemini, Cursor, Copilot CLI, Aider)
 
-> Auto-gerado por /mapa em 2026-05-25. Leia este arquivo ANTES de qualquer ação no projeto.
+> Auto-gerado por /mapa em 2026-05-26. Leia este arquivo ANTES de qualquer ação no projeto.
 > Seções marcadas `<!-- manual -->` são preservadas em re-runs do /mapa.
 
 ## 0. O que é este projeto
@@ -22,7 +22,7 @@ Sistema operacional rodando em servidor Windows da Colchoes Ind. 13 automações
 
 ## 2. Como o Claude Code trabalha aqui (não duplique)
 
-- **`/mapa`** — regera knowledge graph. Última execução: **2026-05-25** (37 nós · 49 arestas · 9 comunidades).
+- **`/mapa`** — regera knowledge graph. Última execução: **2026-05-26** (35 nós · 51 arestas · 9 comunidades).
 - **`/sync-vault`** — sincroniza aprendizados com Obsidian.
 - Memória persistente do Claude em `C:\Users\User\.claude\projects\` — outros agentes não acessam.
 

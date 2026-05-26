@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Contexto do Projeto
 
-> Gerado por /mapa em 2026-05-25. Vault: `G:\Meu Drive\Obsidian Vault\Graphify\Jarvis\` · 36 arquivos · 37 nós · 49 arestas · 9 comunidades
+> Gerado por /mapa em 2026-05-26. Vault: `G:\Meu Drive\Obsidian Vault\Graphify\Jarvis\` · 34 arquivos · 35 nós · 51 arestas · 9 comunidades
 
 **Para qualquer dúvida arquitetural, leia primeiro `_index.md` e o hub da comunidade relevante antes de explorar nodes/.**
 
