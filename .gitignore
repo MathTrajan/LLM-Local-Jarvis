@@ -3,8 +3,13 @@ node_modules/
 .env.local
 .env.*.local
 
-# Claude Code settings (privado)
+# Editor / IDE
+.idea/
+
+# Instruções de IA / assistentes (local, privado)
 .claude/
+CLAUDE.md
+AGENTS.md
 
 # Scripts operacionais do servidor Windows (não versionar)
 PowerShell/
@@ -23,3 +28,5 @@ jarvis-chat-export/graphify-out/
 # Arquivos temporários
 preview.html
 *.log
+
+.vercel
