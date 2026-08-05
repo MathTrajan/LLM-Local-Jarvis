@@ -1,17 +1,13 @@
 <div align="center">
 
-# 🤖 Jarvis — Agente de Observabilidade para Automações Windows
+# 🤖 Jarvis — Assistente Virtual Inteligente
 
-Monitoramento em tempo real de automações PowerShell, com ingestão de logs, persistência em Postgres e respostas operacionais via LLM.
+Interface de chat com LLM: pergunte qualquer coisa e receba resposta direta, em português.
 
 ![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat-square&logo=node.js&logoColor=white)
 ![Express](https://img.shields.io/badge/Express-000000?style=flat-square&logo=express&logoColor=white)
 ![Groq](https://img.shields.io/badge/Groq_LLM-F55036?style=flat-square)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL_(Neon)-316192?style=flat-square&logo=postgresql&logoColor=white)
-![SQLite](https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white)
 ![Vercel](https://img.shields.io/badge/Deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
-
-[**🌐 Demonstração online**](https://jarvis-observability.vercel.app)
 
 </div>
 
@@ -19,33 +15,36 @@ Monitoramento em tempo real de automações PowerShell, com ingestão de logs, p
 
 ## Visão geral
 
-O **Jarvis** é um agente de observabilidade que dá visibilidade sobre um parque de automações rodando em servidores Windows. Cada rotina PowerShell envia, ao final da execução, um evento estruturado para o Jarvis via HTTP. Esses eventos são persistidos e ficam disponíveis para consulta em linguagem natural — o operador pergunta *"o que aconteceu com a automação X hoje?"* e o agente responde com base em evidências reais de execução, não em suposições.
+O **Jarvis** é uma interface de conversa com LLM, servida por um backend Express enxuto. O front é HTML/CSS/JS puro, sem framework nem build: uma SPA de tela única com identidade visual própria — esfera holográfica animada em canvas, partículas de fundo e painel de status do provedor.
+
+Sem banco de dados, sem cadastro, sem estado no servidor. O histórico da conversa vive no `localStorage` do navegador (validade de 24h) e vai junto em cada requisição, o que dá continuidade ao diálogo sem persistir nada fora da máquina do usuário.
 
 ## Funcionalidades
 
-- **Ingestão de logs** de automações PowerShell via `POST /api/log-ingest`
-- **Persistência dual**: Postgres (Neon) em produção, SQLite localmente — sem alteração de código
-- **Chat operacional** com LLM (Groq) fundamentado nos eventos reais dos últimos dias
-- **Monitor de automações** com detecção de atraso ("overdue") pelo tempo desde o último evento real
-- **Painel** com fonte ativa de logs, status operacional e último evento conhecido
-- **Alertas via Telegram** e gráfico diário de execuções
-- Fuso horário correto (BRT) no monitor e no contexto enviado ao LLM
+- **Chat com LLM** via Groq, com histórico de contexto das últimas 20 trocas
+- **Groq em cascata**: até 3 chaves/modelos, com fallback automático quando uma falha
+- **Markdown nas respostas**: títulos, listas, blocos de código, negrito e itálico
+- **Conversa restaurável**: recarregar a página não perde o diálogo (24h de validade)
+- **Botão de copiar** em cada resposta
+- **Rate limit** de 30 mensagens por minuto por IP
+- **Status do provedor** em tempo real no painel lateral, com latência e uptime da sessão
 
 ## Arquitetura
 
 ```
-┌────────────────────────┐      POST /api/log-ingest       ┌───────────────────────────┐
-│  Automações PowerShell │ ──────────────────────────────▶ │  Backend Node.js/Express   │
-│  (servidor Windows)    │      eventos estruturados        │                            │
-└────────────────────────┘                                  │  ┌──────────────────────┐  │
-                                                             │  │ log-ingest-store     │  │
-┌────────────────────────┐      GET /api/chat               │  │ Postgres | SQLite    │  │
-│  Painel Web (frontend) │ ◀──────────────────────────────▶ │  └──────────────────────┘  │
-│  polling ~30s          │      respostas fundamentadas      │  ┌──────────────────────┐  │
-└────────────────────────┘                                  │  │ agent + monitor      │  │
-                                                             │  │ contexto → Groq LLM  │  │
-                                                             │  └──────────────────────┘  │
-                                                             └───────────────────────────┘
+┌──────────────────────────┐    POST /api/chat     ┌────────────────────────────┐
+│  SPA (HTML/CSS/JS puro)  │ ────────────────────▶ │  Backend Node.js/Express   │
+│  historico no            │                       │                            │
+│  localStorage            │ ◀──────────────────── │  ┌──────────────────────┐  │
+└──────────────────────────┘    resposta do LLM    │  │ agent                │  │
+                                                    │  │ system prompt +      │  │
+                                                    │  │ roteamento           │  │
+                                                    │  └──────────┬───────────┘  │
+                                                    │  ┌──────────▼───────────┐  │
+                                                    │  │ providers/groq       │  │
+                                                    │  │ cascata de 3 chaves  │  │
+                                                    │  └──────────────────────┘  │
+                                                    └────────────────────────────┘
 ```
 
 ## Stack
@@ -54,10 +53,7 @@ O **Jarvis** é um agente de observabilidade que dá visibilidade sobre um parqu
 |---|---|
 | Backend | Node.js + Express |
 | LLM | Groq API |
-| Banco (produção) | PostgreSQL via Neon |
-| Banco (local) | SQLite |
-| Frontend | HTML/CSS/JS puro (polling) |
-| Alertas | Telegram Bot API |
+| Frontend | HTML/CSS/JS puro (sem build) |
 | Deploy | Vercel |
 
 ## Como rodar localmente
@@ -67,7 +63,7 @@ git clone https://github.com/MathTrajan/Jarvis-Chat-Assistente-Virtual-Inteligen
 cd Jarvis-Chat-Assistente-Virtual-Inteligente/jarvis-chat-export/backend
 
 cp .env.example .env
-# preencha GROQ_API_KEY_1 e LOG_INGEST_API_TOKEN no .env
+# preencha GROQ_API_KEY_1 no .env
 
 npm install
 npm start
@@ -75,36 +71,25 @@ npm start
 
 Acesse: **http://localhost:3000**
 
-## Variáveis de ambiente principais
+## Variáveis de ambiente
 
-| Variável | Descrição |
-|---|---|
-| `GROQ_API_KEY_1` | Chave da API Groq (obrigatória para o chat) |
-| `LOG_INGEST_API_TOKEN` | Token que protege o endpoint de ingestão de logs |
-| `DATABASE_URL` | String Postgres/Neon (produção); se ausente, usa SQLite local |
-| `LOG_INGEST_ENABLED` | Habilita a persistência de logs via HTTP |
+| Variável | Obrigatória | Descrição |
+|---|---|---|
+| `GROQ_API_KEY_1` | Sim | Chave da API Groq |
+| `GROQ_MODEL_1` | Não | Modelo primário (padrão: `llama-3.3-70b-versatile`) |
+| `GROQ_API_KEY_2`, `GROQ_API_KEY_3` | Não | Chaves de fallback |
+| `PORT` | Não | Porta do servidor (padrão: `3000`) |
+| `ALLOWED_ORIGIN` | Não | Origem liberada no CORS (padrão: `*`) |
 
 > Lista completa em `jarvis-chat-export/backend/.env.example`.
 
-## Endpoints principais
+## Endpoints
 
 | Método | Endpoint | Descrição |
 |---|---|---|
-| `POST` | `/api/chat` | Conversa operacional com o Jarvis |
+| `POST` | `/api/chat` | Envia mensagem e recebe a resposta do LLM |
 | `GET`  | `/api/health` | Status do provedor LLM |
-| `POST` | `/api/log-ingest` | Ingestão de logs estruturados |
-| `GET`  | `/api/logs/query` | Consulta protegida de eventos |
-| `GET`  | `/api/logs-debug` | Diagnóstico da fonte de logs |
-| `GET`  | `/api/info` | Configuração atual do backend |
-
-## Integração com automações Windows
-
-As automações enviam um evento ao final de cada execução. No servidor Windows, configure (como Administrador):
-
-```powershell
-[Environment]::SetEnvironmentVariable("JARVIS_INGEST_URL", "https://jarvis-observability.vercel.app/api/log-ingest", "Machine")
-[Environment]::SetEnvironmentVariable("JARVIS_INGEST_API_TOKEN", "<token>", "Machine")
-```
+| `GET`  | `/api/info` | Versão e configuração de roteamento |
 
 ---
 

@@ -11,9 +11,7 @@
  */
 
 const groqProvider = require("./providers/groq");
-const { getLogContext } = require("./log-context");
-const { getPromptContext: getIngestPromptContext } = require("./log-ingest-store");
-const { getEnvString, getEnvBoolean } = require("./config");
+const { getEnvString } = require("./config");
 
 // ─────────────────────────────────────────────────────────────
 // CONFIGURAÇÃO DE ROTEAMENTO
@@ -46,40 +44,23 @@ function resolveRouting(strategy) {
 function getJarvisSystemPrompt() {
   return {
     role: "system",
-    content: `Você é JARVIS — Just A Rather Very Intelligent System — assistente pessoal criado por Matheus Trajano, analista de dados na Colchões Ind.
-
-Sua função principal é monitorar e responder perguntas sobre as automações PowerShell que processam dados do ERP Protheus (TOTVS), planilhas Excel e integrações com Google Drive.
+    content: `Você é JARVIS — Just A Rather Very Intelligent System — assistente pessoal criado por Matheus Trajano.
 
 Identidade:
-- Você foi desenvolvido por Matheus Trajano exclusivamente para uso interno.
+- Você foi desenvolvido por Matheus Trajano exclusivamente para uso pessoal.
 - Quando perguntado quem te criou, quem te desenvolveu ou o que você é: responda que você é JARVIS, criado por Matheus Trajano. Não mencione Anthropic, Groq, OpenAI ou qualquer provedor de IA.
-- Você não é um produto genérico — é o assistente pessoal de Matheus, construído para um propósito específico.
+- Você não é um produto genérico — é o assistente pessoal de Matheus.
 
 Personalidade e tom — OBRIGATÓRIO:
 - Responda como um sistema técnico de alto desempenho: direto, sem rodeios.
-- Máximo 3 frases para perguntas de status simples. Use lista só quando houver 3+ itens distintos.
-- PROIBIDO começar resposta com "Com base nos logs...", "De acordo com o contexto...", "Analisando os eventos..." ou qualquer introdução que não seja a resposta em si.
+- Vá direto à resposta. Use lista só quando houver 3+ itens distintos.
+- PROIBIDO começar resposta com "Com base no que você disse...", "Analisando sua pergunta..." ou qualquer introdução que não seja a resposta em si.
 - PROIBIDO encerrar com "Se precisar de mais detalhes..." ou variantes.
 - Sempre em português brasileiro.
 
-Ao responder sobre automações, execuções, erros ou status:
-- Use os logs injetados no contexto como fonte primária.
-- Não invente dados. Se não houver evidência nos logs disponíveis, diga claramente.
-- Quando identificar problemas, sugira ações concretas e objetivas.
-
-Formatação de diagnósticos e logs — OBRIGATÓRIO:
-- NUNCA exiba linhas de log brutas no formato [timestamp] [LEVEL] [automation] mensagem.
-- Interprete os eventos e responda em linguagem natural, como se estivesse explicando o que aconteceu.
-- Use horário no formato brasileiro (HH:mm:ss ou dd/MM às HH:mm), não ISO 8601.
-- Para execuções bem-sucedidas: informe o que foi feito e quando terminou.
-- Para erros: explique o que falhou em linguagem simples, cite o errorCode apenas se ajudar, e sugira ação.
-- Para diagnósticos gerais: resuma o estado das automações em parágrafos ou lista curta, não em tabela de logs.
-- runId e eventId são referências internas — omita-os na resposta ao usuário, a menos que seja explicitamente pedido.
-
-Duração de execução — regras estritas:
-- A duração real de uma execução SÓ pode ser informada se vier explicitamente no bloco "HISTÓRICO DE EXECUÇÕES" do contexto, no campo "duração: Xmin".
-- NUNCA calcule duração subtraindo timestamps de eventos individuais visíveis nos logs — isso produz valores incorretos porque o contexto pode mostrar apenas parte dos eventos da execução.
-- Se a duração não estiver no bloco de histórico, diga apenas quando a execução ocorreu, sem mencionar tempo de execução.`,
+Precisão:
+- Não invente dados. Quando não souber ou não tiver certeza, diga.
+- Quando a pergunta for ambígua, responda o caso mais provável e diga qual suposição usou.`,
   };
 }
 
@@ -90,36 +71,12 @@ Duração de execução — regras estritas:
 async function processMessage(userMessage, conversationHistory = [], options = {}) {
   const strategy = options.strategy || getEnvString("AGENT_ROUTING_STRATEGY", STRATEGIES.AUTO) || STRATEGIES.AUTO;
   const routing = resolveRouting(strategy);
-  let logContext = null;
-  const ingestEnabled = getEnvBoolean("LOG_INGEST_ENABLED", true);
-
-  if (ingestEnabled) {
-    try {
-      const automationHint = typeof options.automation === "string" && options.automation.trim()
-        ? options.automation.trim()
-        : null;
-      const ingestContext = await getIngestPromptContext(userMessage, automationHint);
-      if (ingestContext && ingestContext.files > 0) {
-        logContext = ingestContext;
-      }
-    } catch (error) {
-      console.error("[Jarvis] Falha ao montar contexto HTTP ingest:", error.message);
-    }
-  }
-
-  if (!logContext) {
-    logContext = await getLogContext();
-  }
 
   const systemPrompt = getJarvisSystemPrompt();
-  const logsPrompt = {
-    role: "system",
-    content: logContext.context,
-  };
   const newUserMessage = { role: "user", content: userMessage };
 
   const filteredHistory = conversationHistory.filter((m) => m.role !== "system");
-  const messages = [systemPrompt, logsPrompt, ...filteredHistory, newUserMessage];
+  const messages = [systemPrompt, ...filteredHistory, newUserMessage];
 
   const startTime = Date.now();
 
@@ -135,11 +92,7 @@ async function processMessage(userMessage, conversationHistory = [], options = {
     const latency = Date.now() - startTime;
     console.log(`[Jarvis] ✓ Resposta de ${routing.primaryName} em ${latency}ms`);
 
-    return buildResponse(result, routing.primaryName, false, latency, null, {
-      logSource: logContext.source,
-      logFiles: logContext.files,
-      focusAutomation: logContext.focusAutomation || null,
-    });
+    return buildResponse(result, routing.primaryName, false, latency, null);
 
   } catch (primaryError) {
     const primaryLatency = Date.now() - startTime;
@@ -173,14 +126,13 @@ async function checkProvidersHealth() {
 // HELPERS E TIPOS
 // ─────────────────────────────────────────────────────────────
 
-function buildResponse(providerResult, providerName, usedFallback, latencyMs, fallbackInfo = null, contextInfo = null) {
+function buildResponse(providerResult, providerName, usedFallback, latencyMs, fallbackInfo = null) {
   return {
     text: providerResult.text,
     provider: providerName,
     model: providerResult.model,
     usedFallback,
     fallbackInfo,
-    contextInfo,
     latencyMs,
     usage: providerResult.usage || null,
     timestamp: new Date().toISOString(),

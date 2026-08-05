@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#020813" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>J.A.R.V.I.S — Observability Console</title>
+  <title>J.A.R.V.I.S</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
@@ -44,7 +44,7 @@
       <!-- Nome centralizado -->
       <div class="hdr-center">
         <span class="hdr-brand">J.A.R.V.I.S</span>
-        <span class="hdr-brand-sub">AUTOMATION OBSERVABILITY CONSOLE</span>
+        <span class="hdr-brand-sub">ASSISTENTE PESSOAL</span>
       </div>
 
       <!-- Direita: relógio + ações -->
@@ -53,9 +53,6 @@
           <span class="hdr-date" id="live-date">07 MAI. 2026</span>
           <span class="hdr-time" id="live-time">00:00:00</span>
         </div>
-        <button class="hdr-icon-btn" id="btn-notification" title="Notificacoes">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-        </button>
         <button class="hdr-icon-btn" title="Reiniciar conversa" id="btn-clear-chat">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.49"/></svg>
         </button>
@@ -72,18 +69,6 @@
         <nav class="nav-menu">
           <button class="nav-item nav-item--label-only active" id="nav-jarvis" title="Chat Jarvis">
             <span class="nav-label">JARVIS</span>
-          </button>
-          <button class="nav-item" id="nav-automacoes" title="Automacoes">
-            <span class="nav-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 17.5h7M17.5 14v7"/></svg>
-            </span>
-            <span class="nav-label">AUTOMAÇÕES</span>
-          </button>
-          <button class="nav-item" id="nav-dados" title="Fontes de Dados">
-            <span class="nav-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-            </span>
-            <span class="nav-label">DADOS</span>
           </button>
         </nav>
         <div class="nav-footer">
@@ -107,10 +92,6 @@
       </aside>
 
       <main class="chat-main">
-        <div class="overdue-banner" id="overdue-banner" hidden>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          <span id="overdue-banner-text">1 AUTOMAÇÃO ATRASADA</span>
-        </div>
 
         <!-- ══ Área de chat ══ -->
         <section class="messages-area" id="messages-area" role="log" aria-live="polite">
@@ -122,68 +103,16 @@
               <div class="sphere-scan"></div>
               <div class="sphere-label">
                 <span class="sl-title">J.A.R.V.I.S</span>
-                <span class="sl-sub">LOG DIAGNOSTIC CORE</span>
+                <span class="sl-sub">ASSISTENTE PESSOAL</span>
               </div>
             </div>
 
             <div class="welcome-copy" id="welcome-copy">
-              <span class="welcome-kicker">MONITORAMENTO INTELIGENTE</span>
-              <p>Jarvis consulta eventos em tempo real, historico e contexto operacional antes de responder sobre falhas, execucoes e status.</p>
+              <span class="welcome-kicker">PERGUNTE O QUE QUISER</span>
+              <p>Jarvis responde perguntas, explica conceitos, escreve e revisa textos e ajuda a resolver problemas.</p>
             </div>
 
             <div class="quick-cards" id="quick-suggestions"></div>
-          </div>
-        </section>
-
-        <!-- ══ Painel de fontes de dados ══ -->
-        <section class="automations-panel" id="datasources-panel" hidden>
-          <div class="ap-header">
-            <div class="ap-header-left">
-              <button class="ap-back-btn" id="ds-back-btn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="15 18 9 12 15 6"/></svg>
-                CHAT
-              </button>
-              <div>
-                <div class="ap-title">FONTES DE DADOS</div>
-                <div class="ap-subtitle">STATUS EM TEMPO REAL • CLIQUE PARA DIAGNOSTICAR</div>
-              </div>
-            </div>
-            <button class="ap-refresh-btn" id="ds-refresh-btn">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.06-4.43"/></svg>
-              ATUALIZAR
-            </button>
-          </div>
-          <div class="ap-grid" id="ds-grid">
-            <div class="ap-loading">CARREGANDO FONTES DE DADOS...</div>
-          </div>
-        </section>
-
-        <!-- ══ Painel de automações ══ -->
-        <section class="automations-panel" id="automations-panel" hidden>
-          <div class="ap-header">
-            <div class="ap-header-left">
-              <button class="ap-back-btn" id="ap-back-btn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="15 18 9 12 15 6"/></svg>
-                CHAT
-              </button>
-              <div>
-                <div class="ap-title">AUTOMAÇÕES MONITORADAS</div>
-                <div class="ap-subtitle">STATUS EM TEMPO REAL • CLIQUE PARA DIAGNOSTICAR</div>
-              </div>
-            </div>
-            <button class="ap-refresh-btn" id="ap-refresh-btn">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.06-4.43"/></svg>
-              ATUALIZAR
-            </button>
-          </div>
-          <div class="ap-filter-bar">
-            <button class="ap-filter-btn active" data-filter="all">TODOS</button>
-            <button class="ap-filter-btn af-overdue" data-filter="overdue">ATRASADAS</button>
-            <button class="ap-filter-btn af-pending" data-filter="pending">AGUARDANDO</button>
-            <button class="ap-filter-btn af-ok" data-filter="ok">OK</button>
-          </div>
-          <div class="ap-grid" id="ap-grid">
-            <div class="ap-loading">CARREGANDO AUTOMAÇÕES...</div>
           </div>
         </section>
 
@@ -198,7 +127,7 @@
             <button class="input-side-btn" title="Voz" disabled>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
             </button>
-            <textarea id="message-input" class="message-input" placeholder="Pergunte sobre logs, erros, execucoes ou status das automacoes..." rows="1" maxlength="8000"></textarea>
+            <textarea id="message-input" class="message-input" placeholder="Pergunte qualquer coisa..." rows="1" maxlength="8000"></textarea>
             <div class="input-right">
               <span class="char-counter" id="char-counter">0/8000</span>
               <button id="send-button" class="send-button" title="Transmitir" disabled>
@@ -208,7 +137,7 @@
             </div>
           </div>
           <div class="input-hint-bar">
-            <span>ENTER ENVIAR • SHIFT + ENTER NOVA LINHA • DIAGNÓSTICO BASEADO EM LOGS REAIS</span>
+            <span>ENTER ENVIAR • SHIFT + ENTER NOVA LINHA</span>
           </div>
         </footer>
       </main>
@@ -235,23 +164,6 @@
               <span class="rs-data-label">UPTIME DA SESSÃO</span>
               <span class="rs-data-value" id="rs-uptime">00:00:00</span>
             </div>
-          </div>
-        </div>
-        <!-- AUTOMAÇÕES (mini-lista) -->
-        <div class="rs-card" id="rs-monitor-card">
-          <div class="rs-card-title">
-            AUTOMAÇÕES
-            <span class="monitor-badge" id="monitor-overdue-badge" hidden>0</span>
-          </div>
-          <div id="monitor-list" class="monitor-list">
-            <div class="monitor-loading">CARREGANDO...</div>
-          </div>
-        </div>
-        <!-- DADOS (Power BI e fontes externas) -->
-        <div class="rs-card" id="rs-datasources-card">
-          <div class="rs-card-title">DADOS</div>
-          <div id="datasources-list" class="monitor-list">
-            <div class="monitor-loading">CARREGANDO...</div>
           </div>
         </div>
       </aside>

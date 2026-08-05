@@ -1,8 +1,4 @@
-data
-test-logs
-ngrok.exe
-ngrok.log
 .env
 .env.local
+.env.bak-*
 frontend
-scripts

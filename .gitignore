@@ -2,6 +2,7 @@ node_modules/
 .env
 .env.local
 .env.*.local
+.env.bak-*
 
 # Editor / IDE
 .idea/
@@ -11,18 +12,7 @@ node_modules/
 CLAUDE.md
 AGENTS.md
 
-# Scripts operacionais do servidor Windows (não versionar)
-PowerShell/
-
-# Binários e config de tunnel local
-*.exe
-jarvis-chat-export/backend/ngrok.yml
-
-# Banco SQLite local
-jarvis-chat-export/backend/data/
-
-# Logs de teste e saídas geradas
-jarvis-chat-export/backend/test-logs/
+# Saídas geradas
 jarvis-chat-export/graphify-out/
 
 # Arquivos temporários
