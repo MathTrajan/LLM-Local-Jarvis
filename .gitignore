@@ -7,10 +7,19 @@ node_modules/
 # Editor / IDE
 .idea/
 
+# Backups e arquivo morto locais — contem chaves reais, nunca versionar
+_arquivo-local/
+
 # Instruções de IA / assistentes (local, privado)
 .claude/
 CLAUDE.md
 AGENTS.md
+
+# Diário de sessões: é o par PRIVADO do histórico, com decisões e dados reais.
+# Este repositório é PÚBLICO — sem esta linha, um `git add .` publica o diário.
+# Faltava até 2026-10-03, quando o arquivo apareceu como não rastreado na
+# varredura e teria entrado no commit.
+*.local.md
 
 # Saídas geradas
 jarvis-chat-export/graphify-out/
@@ -20,3 +29,6 @@ preview.html
 *.log
 
 .vercel
+
+# Indice do modo documentos (RAG) — derivado do vault, nunca versionar
+jarvis-chat-export/backend/data/

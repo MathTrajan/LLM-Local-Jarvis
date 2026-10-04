@@ -97,9 +97,6 @@ body {
   text-shadow: 0 0 20px rgba(0,217,255,0.55), 0 0 40px rgba(0,217,255,0.2);
   line-height: 1;
 }
-.hdr-brand-sub {
-  font-family: var(--font-mono); font-size: 12px; letter-spacing: 2.5px; color: var(--text3);
-}
 
 /* Logo orb */
 .logo-orb { position: relative; width: 44px; height: 44px; flex-shrink: 0; }
@@ -130,7 +127,9 @@ body {
 }
 .left-sidebar::-webkit-scrollbar { display: none; }
 
-.nav-menu { display: flex; flex-direction: column; gap: 2px; padding: 12px 10px; flex: 1; }
+/* min-height:0 deixa a lista de conversas rolar dentro do nav em vez de empurrar
+   o rodapé da sidebar para fora da tela. */
+.nav-menu { display: flex; flex-direction: column; gap: 2px; padding: 12px 10px; flex: 1; min-height: 0; }
 
 .nav-item {
   display: flex; align-items: center; gap: 10px;
@@ -151,6 +150,60 @@ body {
 }
 .nav-item.active .nav-icon { color: var(--p); filter: drop-shadow(0 0 4px var(--p)); }
 
+/* ═══════════ CONVERSAS (sidebar) ═══════════ */
+.conv-section { display: flex; flex-direction: column; min-height: 0; margin-top: 14px; }
+.conv-section-title {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 1.8px;
+  color: var(--text3); padding: 0 12px 8px;
+  border-bottom: 1px solid var(--border); margin-bottom: 8px;
+}
+.conv-count {
+  font-family: var(--font-mono); font-size: 10px; color: var(--p);
+  background: var(--p12); border: 1px solid var(--border);
+  border-radius: 99px; padding: 1px 6px; min-width: 20px; text-align: center;
+}
+.conv-list { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; scrollbar-width: none; }
+.conv-list::-webkit-scrollbar { display: none; }
+.conv-empty {
+  font-size: 12px; color: var(--text3); padding: 4px 12px;
+  font-style: italic; line-height: 1.4;
+}
+
+.conv-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 10px; border-radius: var(--rsm);
+  background: none; border: 1px solid transparent;
+  cursor: pointer; transition: all var(--t);
+  position: relative; width: 100%; text-align: left; min-width: 0;
+}
+.conv-item:hover { background: var(--p08); border-color: var(--border); }
+.conv-item.active { background: var(--p12); border-color: var(--p20); }
+.conv-item.active::before {
+  content: ''; position: absolute; left: -10px; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 55%; background: var(--p); border-radius: 0 3px 3px 0; box-shadow: 0 0 8px var(--p);
+}
+.conv-item-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.conv-item-title {
+  font-size: 13px; font-weight: 600; color: var(--text2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.conv-item.active .conv-item-title { color: var(--p); }
+.conv-item-meta { font-family: var(--font-mono); font-size: 10px; color: var(--text3); letter-spacing: 0.5px; }
+
+/* Só aparece no hover: uma lixeira sempre visível em cada linha vira ruído e
+   convida ao clique acidental. */
+.conv-del {
+  width: 20px; height: 20px; flex-shrink: 0; border-radius: 4px;
+  background: none; border: none; color: var(--text3);
+  cursor: pointer; opacity: 0; transition: all var(--t);
+  display: flex; align-items: center; justify-content: center;
+}
+.conv-del svg { width: 12px; height: 12px; }
+.conv-item:hover .conv-del { opacity: 0.7; }
+.conv-del:hover { opacity: 1; color: var(--danger); background: rgba(255,61,110,0.12); }
+.conv-del.confirmando { opacity: 1; color: var(--danger); background: rgba(255,61,110,0.18); }
+
 .nav-footer {
   display: flex; align-items: center; gap: 10px;
   padding: 12px 14px; border-top: 1px solid var(--border);
@@ -163,10 +216,8 @@ body {
   box-shadow: 0 0 10px rgba(0,217,255,0.18);
 }
 .nav-footer-info { flex: 1; min-width: 0; }
-.nav-footer-title { font-family: var(--font-mono); font-size: 11px; letter-spacing: 1.5px; color: var(--p); display: block; }
-.nav-footer-sub   { font-family: var(--font-mono); font-size: 12px; letter-spacing: 1px; color: var(--text3); display: block; margin-top: 1px; }
-.nav-progress-bar { height: 2px; background: rgba(0,217,255,0.08); border-radius: 2px; margin-top: 6px; overflow: hidden; }
-.nav-progress-fill { height: 100%; background: linear-gradient(to right, var(--blue), var(--p)); border-radius: 2px; }
+.nav-footer-title { font-family: var(--font-mono); font-size: 11px; letter-spacing: 1px; color: var(--p); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nav-footer-sub   { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.5px; color: var(--text3); display: block; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Direita */
 .hdr-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
@@ -214,16 +265,20 @@ body {
 
 /* ─── Sphere wrap ─── */
 /* A esfera respeita largura E altura: sem o min() com vh ela fica 540px de altura
-   em qualquer tela e empurra os cards de sugestao para fora da area visivel. */
+   em qualquer tela e empurra o resto da tela inicial para fora da area visivel. */
 .sphere-wrap {
+  /* Tamanho unico da esfera: os breakpoints so trocam esta variavel, e o canvas
+     le o valor final pelo offsetWidth. */
+  --esfera: min(clamp(280px, 62vw, 760px), 60vh);
   position: relative;
-  width:  min(clamp(240px, 44vw, 540px), 42vh);
-  height: min(clamp(240px, 44vw, 540px), 42vh);
+  width:  var(--esfera);
+  height: var(--esfera);
   margin-bottom: 18px; flex-shrink: 0;
 }
 .sphere-wrap::before {
+  /* Halo em % para acompanhar a esfera; em px ele sumia nas telas grandes. */
   content: ''; position: absolute;
-  inset: -40px; border-radius: 50%; pointer-events: none; z-index: 0;
+  inset: -9%; border-radius: 50%; pointer-events: none; z-index: 0;
   background: radial-gradient(circle, rgba(0,100,220,0.10) 40%, transparent 72%);
   animation: glow-breathe 3.5s ease-in-out infinite;
   will-change: transform, opacity;
@@ -232,7 +287,7 @@ body {
 #neural-sphere { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; }
 
 .sphere-glow {
-  position: absolute; inset: 50px; border-radius: 50%; pointer-events: none;
+  position: absolute; inset: 11%; border-radius: 50%; pointer-events: none;
   background: radial-gradient(circle, rgba(0,130,255,0.20) 0%, rgba(0,217,255,0.07) 40%, transparent 70%);
   animation: glow-breathe 3.5s ease-in-out infinite;
   will-change: transform, opacity;
@@ -259,35 +314,21 @@ body {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
   display: flex; flex-direction: column; align-items: center; pointer-events: none; z-index: 2;
 }
-.sl-title { font-family: var(--font-hud); font-size: 26px; font-weight: 700; letter-spacing: 8px; color: var(--p); text-shadow: 0 0 18px rgba(0,217,255,0.85), 0 0 36px rgba(0,217,255,0.35); white-space: nowrap; }
-.sl-sub   { font-family: var(--font-mono); font-size: 12px; letter-spacing: 4px; color: var(--p55); margin-top: 5px; white-space: nowrap; }
+/* Escala junto com a esfera. letter-spacing e text-indent em `em` acompanham a
+   fonte sozinhos; o text-indent compensa o espacamento que sobra depois do ultimo
+   caractere e joga o titulo para a esquerda do centro. */
+.sl-title {
+  font-family: var(--font-hud); font-weight: 700;
+  font-size: clamp(18px, 3.4vw, 40px);
+  letter-spacing: 0.3em; text-indent: 0.3em;
+  color: var(--p); text-shadow: 0 0 18px rgba(0,217,255,0.85), 0 0 36px rgba(0,217,255,0.35);
+  white-space: nowrap;
+}
 
 /* Welcome copy */
 .welcome-copy { max-width: 640px; margin: 0 auto 20px; padding: 0 16px; }
 .welcome-kicker { display: inline-block; font-family: var(--font-mono); font-size: 11px; letter-spacing: 3px; color: var(--p55); margin-bottom: 10px; }
 .welcome-copy p  { color: var(--text2); font-size: 15px; line-height: 1.7; }
-
-/* Quick cards */
-.quick-cards { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; width: 100%; }
-.qcard {
-  display: flex; flex-direction: column; gap: 6px;
-  padding: 14px 12px; text-align: left;
-  background: rgba(5,14,28,0.88); border: 1px solid var(--border);
-  border-radius: var(--r); color: var(--text2); cursor: pointer;
-  transition: all var(--t); position: relative; overflow: hidden;
-}
-.qcard::before {
-  content: ''; position: absolute; inset: 0;
-  background: linear-gradient(135deg, rgba(0,217,255,0.07) 0%, transparent 60%);
-  opacity: 0; transition: opacity var(--t);
-}
-.qcard:hover { border-color: var(--p35); color: var(--text); transform: translateY(-2px) scale3d(1.02,1.02,1); box-shadow: 0 6px 24px rgba(0,217,255,0.08); }
-.qcard:hover::before { opacity: 1; }
-.qcard-icon { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; color: var(--p); }
-.qcard-icon svg { width: 20px; height: 20px; filter: drop-shadow(0 0 4px rgba(0,217,255,0.4)); }
-.qcard-title { font-family: var(--font-mono); font-size: 11px; letter-spacing: 2px; color: var(--p); text-transform: uppercase; }
-.qcard-desc  { font-size: 12px; color: var(--text2); line-height: 1.4; flex: 1; }
-.qcard-arrow { font-family: var(--font-mono); font-size: 14px; color: var(--p55); }
 
 /* ═══════════ MESSAGES ═══════════ */
 .message-wrapper { display: flex; gap: 11px; margin-bottom: 18px; animation: msg-in 0.28s cubic-bezier(0.22,1,0.36,1); }
@@ -324,7 +365,9 @@ body {
 /* ═══════════ TYPING ═══════════ */
 .typing-indicator { display: flex; align-items: center; gap: 10px; padding: 4px 28px; animation: fade-in 0.2s ease; }
 @keyframes fade-in { from{opacity:0} to{opacity:1} }
-.typing-avatar { width: 28px; height: 28px; border-radius: 50%; background: radial-gradient(circle,rgba(0,45,90,0.9),rgba(0,8,24,0.99)); border: 1px solid var(--p35); color: var(--p); font-family: var(--font-mono); font-size: 11px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+/* Globo em miniatura no lugar do avatar "J": e o unico momento em que a esfera
+   do Jarvis aparece durante a conversa, ja que a tela inicial fica escondida. */
+.typing-globe { width: 36px; height: 36px; flex-shrink: 0; display: block; }
 .typing-dots { display: flex; gap: 4px; align-items: center; background: rgba(5,14,28,0.9); border: 1px solid var(--border); border-radius: 20px; padding: 7px 12px; }
 .typing-dots span { width: 5px; height: 5px; border-radius: 50%; background: var(--p); animation: dot-fade 1.4s ease-in-out infinite; }
 .typing-dots span:nth-child(2) { animation-delay: 0.25s; }
@@ -350,7 +393,31 @@ body {
 .input-container:focus-within { border-color: var(--p20); box-shadow: 0 0 0 3px rgba(0,217,255,0.05), 0 0 20px rgba(0,217,255,0.07); }
 .message-input { flex: 1; background: none; border: none; outline: none; color: var(--text); font-family: var(--font-body); font-size: 16px; line-height: 1.5; resize: none; max-height: 100px; overflow-y: auto; scrollbar-width: thin; }
 .message-input::placeholder { font-family: var(--font-body); font-size: 16px; color: var(--text3); }
-.input-side-btn { width: 34px; height: 34px; border-radius: 50%; background: none; border: 1px solid var(--border); color: var(--text3); cursor: not-allowed; opacity: 0.55; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+/* O not-allowed/opacidade valia para TODOS os botoes laterais por causa do antigo
+   botao de microfone, que nascia disabled. Isso deixava o de documentos (que
+   sempre funcionou) com cara de desligado. Agora so o [disabled] fica apagado. */
+.input-side-btn {
+  width: 34px; height: 34px; border-radius: 50%; background: none;
+  border: 1px solid var(--border); color: var(--text3); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  transition: color var(--t), border-color var(--t), background var(--t);
+}
+.input-side-btn:hover:not([disabled]) { color: var(--p); border-color: var(--p35); }
+.input-side-btn[disabled] { cursor: not-allowed; opacity: 0.55; }
+/* Microfone aberto: o audio esta indo para fora da maquina, entao o estado tem
+   que ser impossivel de ignorar — vermelho pulsante, nao o ciano de "ok". */
+.input-side-btn.ouvindo {
+  color: var(--danger); border-color: var(--danger);
+  background: rgba(255,61,110,0.12);
+  animation: mic-pulse 1.2s ease-in-out infinite;
+}
+@keyframes mic-pulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(255,61,110,0.45); }
+  50%     { box-shadow: 0 0 0 6px rgba(255,61,110,0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .input-side-btn.ouvindo { animation: none; }
+}
 .input-side-btn svg { width: 16px; height: 16px; }
 .input-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .char-counter { font-family: var(--font-mono); font-size: 11px; letter-spacing: 1px; color: var(--text3); min-width: 46px; text-align: right; }
@@ -379,18 +446,126 @@ body {
 
 .rs-card { background: rgba(8,18,36,0.92); border: 1px solid var(--border); border-radius: var(--r); padding: 14px 15px; transition: border-color var(--t); }
 .rs-card:hover { border-color: var(--p20); }
-.rs-card-title { font-family: var(--font-mono); font-size: 11px; letter-spacing: 2.5px; color: var(--text2); text-transform: uppercase; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
+.rs-card-title { font-family: var(--font-mono); font-size: 11px; letter-spacing: 2.5px; color: var(--text2); text-transform: uppercase; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+/* Filete vertical antes do titulo: marca de secao de painel de instrumentos.
+   Vai como border, nao como ::before — o titulo e flex com space-between, e um
+   pseudo-elemento viraria um terceiro item, jogando o texto para o meio. */
+.rs-card--hud .rs-card-title {
+  color: var(--p);
+  border-left: 2px solid var(--p);
+  padding-left: 8px;
+  box-shadow: -1px 0 8px -2px rgba(0,217,255,0.8);
+}
 
 .rs-core-status { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(0,217,255,0.04); border-radius: var(--rsm); border: 1px solid var(--border); }
 .rs-core-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); box-shadow: 0 0 8px var(--success); animation: dot-pulse 2.5s ease-in-out infinite; flex-shrink: 0; }
-.rs-core-text { font-family: var(--font-hud); font-size: 11px; letter-spacing: 1px; color: var(--success); }
-.rs-divider { height: 1px; background: var(--border); margin: 10px 0; }
-.rs-data-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 6px; margin-top: 8px; }
-.rs-data-item { display: flex; flex-direction: column; gap: 3px; }
-.rs-data-item--full { grid-column: span 2; }
-.rs-data-label { font-family: var(--font-mono); font-size: 13px; letter-spacing: 1.5px; color: var(--text3); text-transform: uppercase; }
-.rs-data-value { font-family: var(--font-hud); font-size: 13px; color: var(--p); letter-spacing: 0.5px; }
-.rs-data-value--accent { color: var(--success); text-shadow: 0 0 6px rgba(0,255,157,0.3); }
+/* min-width:0 + o line-height fixo mantem o texto numa linha so e alinhado com o
+   ponto; sem eles "OPERACIONAL · 100% LOCAL" empurrava a caixa e desalinhava. */
+.rs-core-text {
+  font-family: var(--font-hud); font-size: 10.5px; letter-spacing: 0.6px;
+  color: var(--success); line-height: 1.2; min-width: 0; flex: 1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ── Painel HUD do nucleo ──
+   Cantos chanfrados + colchetes nos vertices: e o vocabulario visual de painel
+   de instrumentos, o mesmo que o resto da interface ja usa na esfera. */
+.rs-card--hud {
+  position: relative;
+  clip-path: polygon(11px 0, 100% 0, 100% calc(100% - 11px), calc(100% - 11px) 100%, 0 100%, 0 11px);
+  background: linear-gradient(160deg, rgba(8,20,40,0.95), rgba(5,12,26,0.95));
+}
+/* Os dois colchetes sao cantos "abertos": so duas bordas de cada, em L. */
+.rs-card--hud::before,
+.rs-card--hud::after {
+  content: ''; position: absolute; width: 13px; height: 13px; pointer-events: none;
+  border-color: var(--p55); opacity: 0.75;
+}
+.rs-card--hud::before { top: 6px;    left: 6px;  border-top: 1px solid;    border-left: 1px solid; }
+.rs-card--hud::after  { bottom: 6px; right: 6px; border-bottom: 1px solid; border-right: 1px solid; }
+
+/* Divisor de secao: rotulo curto com um filete que corre ate a margem. */
+.rs-sec-label {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 1.6px;
+  color: var(--p55); text-transform: uppercase;
+  margin: 14px 0 8px;
+}
+.rs-sec-label::after {
+  content: ''; flex: 1; height: 1px;
+  background: linear-gradient(to right, var(--p35), transparent);
+}
+
+/* Linhas chave/valor: rotulo a esquerda, valor a direita, pontilhado ligando os
+   dois. Cabe muito mais que o grid de duas colunas anterior, que vazava. */
+.rs-linhas { display: flex; flex-direction: column; gap: 6px; }
+.rs-linhas--rodape { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--border); }
+.rs-linha { display: flex; align-items: baseline; gap: 6px; }
+.rs-linha-k {
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 1px;
+  color: var(--text3); text-transform: uppercase; white-space: nowrap; flex-shrink: 0;
+}
+.rs-linha::before {
+  content: ''; order: 1; flex: 1;
+  border-bottom: 1px dotted rgba(0,217,255,0.18); transform: translateY(-3px);
+}
+.rs-linha-v {
+  order: 2; font-family: var(--font-hud); font-size: 12px; color: var(--p);
+  letter-spacing: 0.4px; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; max-width: 62%; text-align: right;
+}
+.rs-linha-v--accent { color: var(--success); text-shadow: 0 0 7px rgba(0,255,157,0.35); }
+
+/* Barra de contexto: unica barra de progresso do painel que mede algo real. */
+.rs-ctx { margin-top: 2px; }
+.rs-ctx-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.rs-ctx-pct { font-family: var(--font-hud); font-size: 19px; color: var(--p); line-height: 1; text-shadow: 0 0 12px rgba(0,217,255,0.4); }
+.rs-ctx-num { font-family: var(--font-mono); font-size: 10px; color: var(--text3); letter-spacing: 0.5px; }
+.rs-ctx-bar { position: relative; height: 6px; background: rgba(0,217,255,0.07); border: 1px solid var(--border); overflow: hidden; }
+.rs-ctx-fill {
+  height: 100%; width: 0%;
+  background: linear-gradient(to right, var(--blue), var(--p));
+  box-shadow: 0 0 10px rgba(0,217,255,0.45);
+  transition: width 0.45s cubic-bezier(0.22,1,0.36,1), background 0.4s ease;
+}
+/* Marcas de 25%: dao escala a barra sem precisar de numero em cada ponto. */
+.rs-ctx-ticks { display: flex; justify-content: space-between; margin-top: 3px; }
+.rs-ctx-ticks i { width: 1px; height: 3px; background: var(--p35); }
+
+/* Telemetria: tres numeros grandes lado a lado, valor acima do rotulo. */
+.rs-metricas { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.rs-metrica {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 8px 4px; background: rgba(0,217,255,0.035);
+  border: 1px solid var(--border);
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+}
+.rs-metrica-v {
+  font-family: var(--font-hud); font-size: 14px; color: var(--p); line-height: 1;
+  text-shadow: 0 0 9px rgba(0,217,255,0.35); white-space: nowrap;
+}
+.rs-metrica-k { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 1px; color: var(--text3); }
+
+/* Varredura lenta atravessando o painel. Precisa de elemento proprio: os
+   ::before/::after do card ja sao os colchetes dos cantos. */
+.rs-card--hud { overflow: hidden; }
+.rs-scan {
+  position: absolute; left: 0; right: 0; top: 0; height: 40px;
+  pointer-events: none; z-index: 0;
+  background: linear-gradient(to bottom, transparent, rgba(0,217,255,0.055), transparent);
+  animation: hud-scan 7s linear infinite;
+}
+@keyframes hud-scan {
+  0%   { transform: translateY(-40px); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateY(560px); opacity: 0; }
+}
+
+/* Respeita quem pediu menos animacao no sistema. */
+@media (prefers-reduced-motion: reduce) {
+  .rs-scan { animation: none; opacity: 0; }
+}
 
 
 /* ═══════════ TOASTS ═══════════ */
@@ -428,7 +603,6 @@ body {
 }
 
 @media (max-width: 900px) {
-  .hdr-brand-sub { display: none; }
   .hdr-brand { font-size: 18px; letter-spacing: 6px; }
 }
 
@@ -449,11 +623,8 @@ body {
     z-index: 120;
     padding: 8px 12px calc(7px + env(safe-area-inset-bottom, 0px));
   }
-  .quick-cards { grid-template-columns: 1fr 1fr; }
-  .sphere-wrap { width: clamp(240px, 70vw, 360px); height: clamp(240px, 70vw, 360px); }
+  .sphere-wrap { --esfera: min(clamp(240px, 78vw, 460px), 46vh); }
   .welcome-copy p { font-size: 14px; }
-  .sl-title { font-size: 20px; letter-spacing: 6px; }
-  .sl-sub   { font-size: 12px; letter-spacing: 3px; }
   .message-content { max-width: 82%; }
   .toast-container { bottom: 20px; }
 }
@@ -461,16 +632,161 @@ body {
 @media (max-width: 480px) {
   :root { --hh: 56px; }
   .hdr-brand { font-size: 16px; letter-spacing: 4px; }
-  .quick-cards { grid-template-columns: 1fr; }
   .message-content { max-width: 90%; }
-  .sphere-wrap { width: clamp(180px, 72vw, 280px); height: clamp(180px, 72vw, 280px); }
-  .sl-title { font-size: 17px; letter-spacing: 4px; }
-  .sl-sub { display: none; }
+  .sphere-wrap { --esfera: min(clamp(200px, 80vw, 340px), 42vh); }
   .input-hint-bar { display: none; }
   .input-container { align-items: flex-end; border-radius: 22px; padding: 8px; }
   .message-input { min-height: 40px; padding-top: 8px; }
   .logo-orb { width: 36px; height: 36px; }
 }
+
+/* ─── Streaming: cursor no fim do texto enquanto a resposta chega ─── */
+.message-bubble.streaming::after {
+  content: "▋";
+  display: inline-block;
+  margin-left: 2px;
+  color: var(--p);
+  animation: cursor-blink 1s steps(2) infinite;
+}
+@keyframes cursor-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+
+/* ─── Modo documentos ─── */
+.input-side-btn.ativo {
+  color: var(--p);
+  background: var(--p12);
+  border-color: var(--p35);
+  box-shadow: 0 0 8px rgba(0,217,255,0.25);
+}
+.message-fontes {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: var(--text3);
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+/* ─── Ações de arquivo (card de confirmação) ─── */
+.acao-card {
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--p);
+  border-radius: 4px;
+  background: rgba(0,130,255,0.05);
+  padding: 10px 12px;
+}
+/* Editar e apagar ganham cor de alerta: o clique aqui nao tem volta simples. */
+.acao-card.destrutiva { border-left-color: var(--danger, #ff5c5c); background: rgba(255,92,92,0.05); }
+
+.acao-titulo {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--p);
+  margin-bottom: 8px;
+  overflow-wrap: anywhere;
+}
+.acao-card.destrutiva .acao-titulo { color: var(--danger, #ff5c5c); }
+
+.acao-previa, .acao-saida {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text2);
+  background: rgba(0,0,0,0.28);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 8px;
+  margin: 0 0 8px;
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.acao-saida { margin: 8px 0 0; }
+
+.acao-botoes { display: flex; gap: 8px; }
+.acao-btn {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 6px 14px;
+  border-radius: 3px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text2);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.acao-btn.confirmar { border-color: var(--p); color: var(--p); }
+.acao-btn.confirmar:hover:not(:disabled) { background: var(--p); color: #020813; }
+.acao-card.destrutiva .acao-btn.confirmar { border-color: var(--danger, #ff5c5c); color: var(--danger, #ff5c5c); }
+.acao-card.destrutiva .acao-btn.confirmar:hover:not(:disabled) { background: var(--danger, #ff5c5c); color: #020813; }
+.acao-btn.cancelar:hover:not(:disabled) { border-color: var(--text2); color: var(--text); }
+.acao-btn:disabled { opacity: 0.5; cursor: default; }
+
+.acao-estado {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  overflow-wrap: anywhere;
+}
+.acao-estado.ok        { color: var(--success, #38e08a); }
+.acao-estado.erro      { color: var(--danger, #ff5c5c); }
+.acao-estado.cancelado { color: var(--text3); }
+.acao-erro { font-size: 12px; color: var(--text2); line-height: 1.5; }
+.acao-nota {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: var(--text3);
+  margin-bottom: 8px;
+}
+
+/* ─── Memória (sidebar direita) ─── */
+.memoria-hint  { font-size: 12px; color: var(--text3); margin: -2px 0 8px; line-height: 1.4; }
+.memoria-list  { display: flex; flex-direction: column; gap: 3px; max-height: 230px; overflow-y: auto; margin-bottom: 8px; }
+.memoria-empty { font-family: var(--font-mono); font-size: 10.5px; color: var(--text3); letter-spacing: 0.5px; padding: 2px 0; }
+.memoria-item {
+  display: flex; align-items: flex-start; gap: 6px;
+  padding: 5px 7px; border-radius: var(--rsm);
+  border: 1px solid transparent; transition: all var(--t);
+}
+.memoria-item:hover { background: var(--p08); border-color: var(--border); }
+.memoria-texto { flex: 1; min-width: 0; font-size: 12.5px; color: var(--text2); line-height: 1.35; overflow-wrap: anywhere; }
+
+/* Mesmo padrao do .conv-del: aparece no hover, dois cliques para excluir. */
+.memoria-del {
+  width: 18px; height: 18px; flex-shrink: 0; border-radius: 4px;
+  background: none; border: none; color: var(--text3);
+  cursor: pointer; opacity: 0; transition: all var(--t);
+  display: flex; align-items: center; justify-content: center;
+}
+.memoria-del svg { width: 10px; height: 10px; }
+.memoria-item:hover .memoria-del { opacity: 0.7; }
+.memoria-del:hover { opacity: 1; color: var(--danger); background: rgba(255,61,110,0.12); }
+.memoria-del.confirmando { opacity: 1; color: var(--danger); background: rgba(255,61,110,0.18); }
+
+.memoria-add { display: flex; gap: 6px; }
+.memoria-input {
+  flex: 1; min-width: 0;
+  background: rgba(0,20,45,0.6); border: 1px solid var(--border);
+  border-radius: var(--rsm); color: var(--text);
+  font-family: var(--font-body); font-size: 13px; padding: 6px 9px;
+  outline: none; transition: border-color var(--t);
+}
+.memoria-input:focus { border-color: var(--p35); }
+.memoria-input::placeholder { color: var(--text3); }
+.memoria-add-btn {
+  width: 30px; height: 30px; flex-shrink: 0; border-radius: var(--rsm);
+  background: var(--p12); border: 1px solid var(--border); color: var(--text2);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: all var(--t);
+}
+.memoria-add-btn svg { width: 13px; height: 13px; }
+.memoria-add-btn:hover { background: var(--p20); color: var(--p); border-color: var(--p35); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }

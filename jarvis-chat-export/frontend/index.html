@@ -44,7 +44,6 @@
       <!-- Nome centralizado -->
       <div class="hdr-center">
         <span class="hdr-brand">J.A.R.V.I.S</span>
-        <span class="hdr-brand-sub">ASSISTENTE PESSOAL</span>
       </div>
 
       <!-- Direita: relógio + ações -->
@@ -53,7 +52,7 @@
           <span class="hdr-date" id="live-date">07 MAI. 2026</span>
           <span class="hdr-time" id="live-time">00:00:00</span>
         </div>
-        <button class="hdr-icon-btn" title="Reiniciar conversa" id="btn-clear-chat">
+        <button class="hdr-icon-btn" title="Voltar à tela inicial" id="btn-clear-chat">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.49"/></svg>
         </button>
         <button class="hdr-icon-btn hdr-menu" id="btn-menu-toggle" title="Menu">
@@ -67,9 +66,30 @@
       <!-- Sidebar esquerda -->
       <aside class="left-sidebar" id="left-sidebar">
         <nav class="nav-menu">
-          <button class="nav-item nav-item--label-only active" id="nav-jarvis" title="Chat Jarvis">
+          <button class="nav-item active" id="nav-jarvis" title="Tela inicial do Jarvis">
+            <span class="nav-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg>
+            </span>
             <span class="nav-label">JARVIS</span>
           </button>
+
+          <button class="nav-item" id="nav-nova-conversa" title="Começar uma conversa nova">
+            <span class="nav-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </span>
+            <span class="nav-label">NOVA</span>
+          </button>
+
+          <!-- ══ Conversas salvas ══ -->
+          <div class="conv-section">
+            <div class="conv-section-title">
+              CONVERSAS
+              <span class="conv-count" id="conv-count">0</span>
+            </div>
+            <div class="conv-list" id="conv-list">
+              <p class="conv-empty" id="conv-empty">Nenhuma conversa ainda.</p>
+            </div>
+          </div>
         </nav>
         <div class="nav-footer">
           <div class="nav-avatar">
@@ -82,11 +102,8 @@
             </svg>
           </div>
           <div class="nav-footer-info">
-            <span class="nav-footer-title">JARVIS SYSTEM</span>
-            <span class="nav-footer-sub">ADMIN ACCESS</span>
-            <div class="nav-progress-bar">
-              <div class="nav-progress-fill" style="width:62%"></div>
-            </div>
+            <span class="nav-footer-title" id="nav-modo">VERIFICANDO...</span>
+            <span class="nav-footer-sub" id="nav-docs">&nbsp;</span>
           </div>
         </div>
       </aside>
@@ -103,7 +120,6 @@
               <div class="sphere-scan"></div>
               <div class="sphere-label">
                 <span class="sl-title">J.A.R.V.I.S</span>
-                <span class="sl-sub">ASSISTENTE PESSOAL</span>
               </div>
             </div>
 
@@ -111,21 +127,26 @@
               <span class="welcome-kicker">PERGUNTE O QUE QUISER</span>
               <p>Jarvis responde perguntas, explica conceitos, escreve e revisa textos e ajuda a resolver problemas.</p>
             </div>
-
-            <div class="quick-cards" id="quick-suggestions"></div>
           </div>
         </section>
 
         <div class="typing-indicator" id="typing-indicator" hidden>
-          <div class="typing-avatar">J</div>
+          <canvas class="typing-globe" id="typing-globe" aria-hidden="true"></canvas>
           <div class="typing-dots"><span></span><span></span><span></span></div>
           <span class="typing-text">PROCESSANDO...</span>
         </div>
 
         <footer class="input-area" id="input-area">
           <div class="input-container">
-            <button class="input-side-btn" title="Voz" disabled>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            <button class="input-side-btn" id="btn-mic" title="Falar com o Jarvis (precisa ser habilitado)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+            </button>
+            <button class="input-side-btn" id="btn-voz" title="Ler as respostas em voz alta">
+              <svg class="voz-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" hidden><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+              <svg class="voz-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/></svg>
+            </button>
+            <button class="input-side-btn" id="btn-docs" title="Modo documentos: responder com base nas suas notas">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
             </button>
             <textarea id="message-input" class="message-input" placeholder="Pergunte qualquer coisa..." rows="1" maxlength="8000"></textarea>
             <div class="input-right">
@@ -144,26 +165,92 @@
 
       <aside class="right-sidebar" id="right-sidebar">
         <!-- NÚCLEO JARVIS -->
-        <div class="rs-card">
+        <div class="rs-card rs-card--hud">
+          <i class="rs-scan" aria-hidden="true"></i>
           <div class="rs-card-title">NÚCLEO JARVIS</div>
           <div class="rs-core-status">
             <span class="rs-core-dot" id="rs-status-dot"></span>
             <span class="rs-core-text" id="rs-status-text">VERIFICANDO...</span>
           </div>
-          <div class="rs-divider"></div>
-          <div class="rs-data-grid">
-            <div class="rs-data-item">
-              <span class="rs-data-label">PROVEDOR LLM</span>
-              <span class="rs-data-value rs-data-value--accent">GROQ</span>
+
+          <div class="rs-sec-label">UNIDADE DE INFERÊNCIA</div>
+          <div class="rs-linhas">
+            <div class="rs-linha">
+              <span class="rs-linha-k">MODELO</span>
+              <span class="rs-linha-v rs-linha-v--accent" id="rs-model">—</span>
             </div>
-            <div class="rs-data-item">
-              <span class="rs-data-label">LATÊNCIA</span>
-              <span class="rs-data-value" id="rs-latency">—</span>
+            <div class="rs-linha">
+              <span class="rs-linha-k">PRECISÃO</span>
+              <span class="rs-linha-v" id="rs-precisao">—</span>
             </div>
-            <div class="rs-data-item rs-data-item--full">
-              <span class="rs-data-label">UPTIME DA SESSÃO</span>
-              <span class="rs-data-value" id="rs-uptime">00:00:00</span>
+            <div class="rs-linha">
+              <span class="rs-linha-k">PESO</span>
+              <span class="rs-linha-v" id="rs-peso">—</span>
             </div>
+            <div class="rs-linha">
+              <span class="rs-linha-k">MOTOR</span>
+              <span class="rs-linha-v" id="rs-motor">—</span>
+            </div>
+          </div>
+
+          <div class="rs-sec-label">JANELA DE CONTEXTO</div>
+          <div class="rs-ctx">
+            <div class="rs-ctx-head">
+              <span class="rs-ctx-pct" id="rs-ctx-pct">0%</span>
+              <span class="rs-ctx-num" id="rs-ctx-valor">—</span>
+            </div>
+            <div class="rs-ctx-bar"><div class="rs-ctx-fill" id="rs-ctx-fill"></div></div>
+            <div class="rs-ctx-ticks"><i></i><i></i><i></i><i></i></div>
+          </div>
+
+          <div class="rs-sec-label">TELEMETRIA</div>
+          <div class="rs-metricas">
+            <div class="rs-metrica">
+              <span class="rs-metrica-v" id="rs-velocidade">—</span>
+              <span class="rs-metrica-k">TOK/S</span>
+            </div>
+            <div class="rs-metrica">
+              <span class="rs-metrica-v" id="rs-latency">—</span>
+              <span class="rs-metrica-k">RESPOSTA</span>
+            </div>
+            <div class="rs-metrica">
+              <span class="rs-metrica-v" id="rs-cache">—</span>
+              <span class="rs-metrica-k">CACHE</span>
+            </div>
+          </div>
+
+          <div class="rs-linhas rs-linhas--rodape">
+            <div class="rs-linha">
+              <span class="rs-linha-k">ÚLTIMA TROCA</span>
+              <span class="rs-linha-v" id="rs-tokens">—</span>
+            </div>
+            <div class="rs-linha">
+              <span class="rs-linha-k">TOKENS NA SESSÃO</span>
+              <span class="rs-linha-v" id="rs-tokens-sessao">0</span>
+            </div>
+            <div class="rs-linha">
+              <span class="rs-linha-k">TEMPO ATIVO</span>
+              <span class="rs-linha-v" id="rs-uptime">00:00:00</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- MEMÓRIA -->
+        <div class="rs-card rs-card--hud">
+          <div class="rs-card-title">
+            MEMÓRIA
+            <span class="conv-count" id="memoria-count">0</span>
+          </div>
+          <p class="memoria-hint">Fatos que o Jarvis lembra em qualquer conversa.</p>
+          <div class="memoria-list" id="memoria-list">
+            <p class="memoria-empty">Nada aprendido ainda.</p>
+          </div>
+          <div class="memoria-add">
+            <input id="memoria-input" class="memoria-input" type="text" maxlength="240"
+                   placeholder="Ensinar um fato..." autocomplete="off" />
+            <button id="memoria-add-btn" class="memoria-add-btn" title="Guardar na memória">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
           </div>
         </div>
       </aside>
